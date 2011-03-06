@@ -16,6 +16,7 @@
 
 #include <ros/ros.h>
 #include <Eigen/Dense>
+#include <tf/transform_broadcaster.h>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
@@ -68,61 +69,73 @@ public:
       cloud_filtered_y (new pcl::PointCloud<pcl::PointXYZ> ()),
       cloud_filtered_z (new pcl::PointCloud<pcl::PointXYZ> ());
 
-    pcl::fromROSMsg(*scan,*cloud);
+    // convert pcl2 message to pcl object
+    pcl::fromROSMsg(*scan,*cloud);  
     pcl::fromROSMsg(*cloud_voxel_pcl2,*cloud_voxel);
 
-    datacount++;    
+    datacount++;  // we got a new set of data so increment datacount
     //printf("%i\n", datacount);
 
-    //if(datacount%100 == 0) {
-      //printf("Beginning analysis...\n");
-      Eigen::Vector4f centroid;
-      float xpos = 0.0;
-      float ypos = 0.0;
-      float zpos = 0.0;
+    //printf("Beginning analysis...\n");
+    Eigen::Vector4f centroid;
+    float xpos = 0.0;
+    float ypos = 0.0;
+    float zpos = 0.0;
 
-      //ros::Time tstart = ros::Time::now();
-      //std::cout << "start time:  " << tstart << "\n ";
+    //ros::Time tstart = ros::Time::now();
+    //std::cout << "start time:  " << tstart << "\n ";
 
-      // pass through filter
-      pcl::PassThrough<pcl::PointXYZ> pass;
-      pass.setInputCloud(cloud_voxel);
-      pass.setFilterFieldName("x");
-      pass.setFilterLimits(-1.0, 1.0);
-      pass.filter(*cloud_filtered_x);
+    // pass through filter
+    pcl::PassThrough<pcl::PointXYZ> pass;
+    pass.setInputCloud(cloud_voxel);
+    pass.setFilterFieldName("x");
+    pass.setFilterLimits(-1.0, 1.0);
+    pass.filter(*cloud_filtered_x);
 
-      pass.setInputCloud(cloud_filtered_x);
-      pass.setFilterFieldName("y");
-      pass.setFilterLimits(-0.5, 0.5);
-      pass.filter(*cloud_filtered_y);
+    pass.setInputCloud(cloud_filtered_x);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(-0.5, 0.5);
+    pass.filter(*cloud_filtered_y);
 
-      pass.setInputCloud(cloud_filtered_y);
-      pass.setFilterFieldName("z");
-      pass.setFilterLimits(1, 1.8);
-      pass.filter(*cloud_filtered_z);
+    pass.setInputCloud(cloud_filtered_y);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(1, 1.8);
+    pass.filter(*cloud_filtered_z);
 
-      pcl::compute3DCentroid(*cloud_filtered_z, centroid);
-      xpos = centroid(0);
-      ypos = centroid(1);
-      zpos = centroid(2);
+    pcl::compute3DCentroid(*cloud_filtered_z, centroid);
+    xpos = centroid(0);
+    ypos = centroid(1);
+    zpos = centroid(2);
 
-      //ros::Time tstop = ros::Time::now();
-      //std::cout << "finish time:  " << tstop << "\n ";
+    tf::Transform transform;
+    transform.setOrigin(tf::Vector3(xpos, ypos, zpos));
+    transform.setRotation(tf::Quaternion(0, 0, 0, 1));
 
-      printf("X: %f\n", xpos);
-      //printf("Y: %f\n", ypos);
-      //printf("Z: %f\n", zpos);
+    static tf::TransformBroadcaster br;
+    br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "openni_depth_optical_frame", "object1"));
 
-      //printf("Saving point cloud data...\n");
+    //ros::Time tstop = ros::Time::now();
+    //std::cout << "finish time:  " << tstop << "\n ";
 
-      // write point clouds out to file
-      //pcl::io::savePCDFileASCII ("test1_cloud.pcd", *cloud);
-      //pcl::io::savePCDFileASCII ("test1_cloud_voxel.pcd", *cloud_voxel);
-      //pcl::io::savePCDFileASCII ("test1_cloud_filtered_x.pcd", *cloud_filtered_x);
-      //pcl::io::savePCDFileASCII ("test1_cloud_filtered_y.pcd", *cloud_filtered_y);
-      //pcl::io::savePCDFileASCII ("test1_cloud_filtered_z.pcd", *cloud_filtered_z);
-      //printf("Complete\n");
-      //}
+    /*
+    printf("X: %f\n", xpos);
+    printf("Y: %f\n", ypos);
+    printf("Z: %f\n", zpos);
+    */
+
+    /*
+    if(datacount%100 == 0) {
+    printf("Saving point cloud data...\n");
+    
+    // write point clouds out to file
+    pcl::io::savePCDFileASCII ("test1_cloud.pcd", *cloud);
+    pcl::io::savePCDFileASCII ("test1_cloud_voxel.pcd", *cloud_voxel);
+    pcl::io::savePCDFileASCII ("test1_cloud_filtered_x.pcd", *cloud_filtered_x);
+    pcl::io::savePCDFileASCII ("test1_cloud_filtered_y.pcd", *cloud_filtered_y);
+    pcl::io::savePCDFileASCII ("test1_cloud_filtered_z.pcd", *cloud_filtered_z);
+    printf("Complete\n");
+    }
+    */
   }
 };
 
