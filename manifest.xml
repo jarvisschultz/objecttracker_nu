@@ -1,0 +1,17 @@
+<package>
+  <description brief="nu_objecttracker">
+
+     nu_objecttracker
+
+  </description>
+  <author>Jake Ware and Jarvis Schultz</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/nu_objecttracker</url>
+
+  <depend package="roscpp"/>	
+  <depend package="pcl"/>
+
+</package>
+
+
