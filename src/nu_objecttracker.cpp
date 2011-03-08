@@ -14,6 +14,10 @@
 
 #include <iostream>
 
+#include <boost/thread/thread.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/condition.hpp>
+
 #include <ros/ros.h>
 #include <Eigen/Dense>
 #include <tf/transform_broadcaster.h>
@@ -45,16 +49,21 @@ class BlobDetector {
 private:
   ros::NodeHandle n_;
   ros::Subscriber sub_;
+  ros::Publisher cloudpub_[2];
 
 public:
   BlobDetector() {
     sub_=n_.subscribe("/camera/depth/points", 1, &BlobDetector::cloudcb, this);
+    cloudpub_[0] = n_.advertise<sensor_msgs::PointCloud2> ("object1_cloud", 1);
+    cloudpub_[1] = n_.advertise<sensor_msgs::PointCloud2> ("object2_cloud", 1);
   }
 
   // this function gets called every time new pcl data comes in
   void cloudcb(const sensor_msgs::PointCloud2ConstPtr &scan) {
     sensor_msgs::PointCloud2::Ptr 
-      cloud_voxel_pcl2 (new sensor_msgs::PointCloud2 ());
+      cloud_voxel_pcl2 (new sensor_msgs::PointCloud2 ()),
+      object1_cloud (new sensor_msgs::PointCloud2 ()),
+      object2_cloud (new sensor_msgs::PointCloud2 ());    
 
     // voxel filter
     pcl::VoxelGrid<sensor_msgs::PointCloud2> sor;
@@ -101,6 +110,10 @@ public:
     pass.setFilterFieldName("z");
     pass.setFilterLimits(1, 1.8);
     pass.filter(*cloud_filtered_z);
+
+    pcl::toROSMsg(*cloud_filtered_z, *object1_cloud);
+    cloudpub_[0].publish(object1_cloud);
+    //cloudpub_[1].publish(hands.hands[1].handcloud);
 
     pcl::compute3DCentroid(*cloud_filtered_z, centroid);
     xpos = centroid(0);
