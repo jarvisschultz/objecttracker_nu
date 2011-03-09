@@ -14,10 +14,6 @@
 
 #include <iostream>
 
-#include <boost/thread/thread.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/condition.hpp>
-
 #include <ros/ros.h>
 #include <Eigen/Dense>
 #include <tf/transform_broadcaster.h>
@@ -28,11 +24,14 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/features/feature.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/features/normal_3d.h>
 
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
-
-
 
 //---------------------------------------------------------------------------
 // Global Variables
@@ -40,7 +39,7 @@
 
 bool gotdata = false;
 int datacount = 100;
-
+typedef pcl::PointXYZ PointT;
 
 //---------------------------------------------------------------------------
 // Objects and Functions
@@ -78,9 +77,7 @@ public:
 	cloud_voxel (new pcl::PointCloud<pcl::PointXYZ> ()),
 	cloud_filtered_x (new pcl::PointCloud<pcl::PointXYZ> ()),
 	cloud_filtered_y (new pcl::PointCloud<pcl::PointXYZ> ()),
-	cloud_filtered_z (new pcl::PointCloud<pcl::PointXYZ> ()),
-	cloud_stat (new pcl::PointCloud<pcl::PointXYZ> ()),
-	cloud_stat_outlier (new pcl::PointCloud<pcl::PointXYZ> ());
+	cloud_filtered_z (new pcl::PointCloud<pcl::PointXYZ> ());
     
 
     // convert pcl2 message to pcl object
@@ -116,26 +113,58 @@ public:
     pass.setFilterLimits(.75, 2.5);
     pass.filter(*cloud_filtered_z);
 
-    // Perform statistical filtering:
-    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor2;
-    sor2.setInputCloud (cloud_filtered_z);
-    sor2.setMeanK (50);
-    sor2.setStddevMulThresh (0.001);
-    sor2.filter (*cloud_stat);
+    // Search for a sphere:
+    // Declare variables:
+    pcl::NormalEstimation<PointT, pcl::Normal> ne;
+    pcl::SACSegmentationFromNormals<PointT, pcl::Normal> seg;
+    pcl::ExtractIndices<PointT> extract;
+    pcl::ExtractIndices<pcl::Normal> extract_normals;
+    pcl::KdTreeFLANN<PointT>::Ptr tree (new pcl::KdTreeFLANN<PointT> ());
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal> ());
+    pcl::ModelCoefficients::Ptr coefficients_sphere (new pcl::ModelCoefficients ());
+    pcl::PointIndices::Ptr inliers_sphere (new pcl::PointIndices ());
+    pcl::PointCloud<PointT>::Ptr cloud_sphere (new pcl::PointCloud<PointT> ());
 
-    sor2.setNegative(true);
-    sor2.filter(*cloud_stat_outlier);
+    // Estimate point normals
+    ne.setSearchMethod (tree);
+    ne.setInputCloud (cloud_filtered_z);
+    ne.setKSearch (50);
+    ne.compute (*cloud_normals);
 
-    pcl::toROSMsg(*cloud_stat, *object1_cloud);
+    // Perform normal optimization:
+    seg.setOptimizeCoefficients (true);
+    seg.setModelType (pcl::SACMODEL_SPHERE);
+    seg.setNormalDistanceWeight (0.1);
+    seg.setMethodType (pcl::SAC_RANSAC);
+    seg.setRadiusLimits (0.01,0.2);
+    seg.setMaxIterations (10000);
+    seg.setDistanceThreshold (0.05);
+    seg.setInputCloud (cloud_filtered_z);
+    seg.setInputNormals (cloud_normals);
+    // Obtain the sphere inliers and coefficients
+    seg.segment (*inliers_sphere, *coefficients_sphere);
+   
+    // Extract the sphere inliers from the input cloud
+    extract.setInputCloud (cloud_filtered_z);
+    extract.setIndices (inliers_sphere);
+    extract.setNegative (false);
+
+    // Convert the extracted sphere object to a new point cloud
+    extract.filter (*cloud_sphere);
+
+    // Get XYZ data:
+    // xpos = coefficients_sphere.x();
+    // ypos = coefficients_sphere.y();
+    // zpos = coefficients_sphere.z();
+
+    // Publish cloud:
+    pcl::toROSMsg(*cloud_sphere, *object1_cloud);
     cloudpub_[0].publish(object1_cloud);
-    
-    pcl::toROSMsg(*cloud_stat_outlier, *object2_cloud);
-    cloudpub_[1].publish(object2_cloud);
 
-    pcl::compute3DCentroid(*cloud_stat, centroid);
+    pcl::compute3DCentroid(*cloud_sphere, centroid);
     xpos = centroid(0);
     ypos = centroid(1);
-    zpos = centroid(2);
+    zpos = centroid(2); 
 
     tf::Transform transform;
     transform.setOrigin(tf::Vector3(xpos, ypos, zpos));
