@@ -40,6 +40,10 @@
 bool gotdata = false;
 int datacount = 100;
 typedef pcl::PointXYZ PointT;
+float xpos_last = 0.0;
+float ypos_last = 0.0;
+float zpos_last = 0.0;
+bool first_iteration = true;
 
 //---------------------------------------------------------------------------
 // Objects and Functions
@@ -65,13 +69,13 @@ public:
       cloud_voxel_pcl2 (new sensor_msgs::PointCloud2 ()),
       object1_cloud (new sensor_msgs::PointCloud2 ()),
       object2_cloud (new sensor_msgs::PointCloud2 ());    
-
+/*
     // voxel filter
     pcl::VoxelGrid<sensor_msgs::PointCloud2> sor;
     sor.setInputCloud (scan);
-    sor.setLeafSize (0.02, 0.02, 0.02);
+    sor.setLeafSize (0.1, 0.1, 0.1);
     sor.filter (*cloud_voxel_pcl2);   
-
+*/
     pcl::PointCloud<pcl::PointXYZ>::Ptr
       cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
 	cloud_voxel (new pcl::PointCloud<pcl::PointXYZ> ()),
@@ -82,7 +86,7 @@ public:
 
     // convert pcl2 message to pcl object
     pcl::fromROSMsg(*scan,*cloud);  
-    // pcl::fromROSMsg(*cloud_voxel_pcl2,*cloud_voxel);
+    //pcl::fromROSMsg(*cloud_voxel_pcl2,*cloud_voxel);
 
     datacount++;  // we got a new set of data so increment datacount
     //printf("%i\n", datacount);
@@ -92,79 +96,69 @@ public:
     float xpos = 0.0;
     float ypos = 0.0;
     float zpos = 0.0;
+    float D_sphere = 0.05; //meters
+    float R_search = 3.0*D_sphere;
 
     // ros::Time tstart = ros::Time::now();
     // std::cout << "start time:  " << tstart << "\n ";
 
     // pass through filter
     pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud(cloud);
-    pass.setFilterFieldName("x");
-    pass.setFilterLimits(-1.0, 1.0);
-    pass.filter(*cloud_filtered_x);
 
-    pass.setInputCloud(cloud_filtered_x);
-    pass.setFilterFieldName("y");
-    pass.setFilterLimits(-0.5, 0.5);
-    pass.filter(*cloud_filtered_y);
+    // Now we need to filter for the sphere:
+    if (first_iteration == true)
+    {
+	pass.setInputCloud(cloud);
+	pass.setFilterFieldName("x");
+	pass.setFilterLimits(-1.0, 1.0);
+	pass.filter(*cloud_filtered_x);
 
-    pass.setInputCloud(cloud_filtered_y);
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(.75, 2.5);
-    pass.filter(*cloud_filtered_z);
+	pass.setInputCloud(cloud_filtered_x);
+	pass.setFilterFieldName("y");
+	pass.setFilterLimits(-0.5, 0.5);
+	pass.filter(*cloud_filtered_y);
 
-    // Search for a sphere:
-    // Declare variables:
-    pcl::NormalEstimation<PointT, pcl::Normal> ne;
-    pcl::SACSegmentationFromNormals<PointT, pcl::Normal> seg;
-    pcl::ExtractIndices<PointT> extract;
-    pcl::ExtractIndices<pcl::Normal> extract_normals;
-    pcl::KdTreeFLANN<PointT>::Ptr tree (new pcl::KdTreeFLANN<PointT> ());
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal> ());
-    pcl::ModelCoefficients::Ptr coefficients_sphere (new pcl::ModelCoefficients ());
-    pcl::PointIndices::Ptr inliers_sphere (new pcl::PointIndices ());
-    pcl::PointCloud<PointT>::Ptr cloud_sphere (new pcl::PointCloud<PointT> ());
+	pass.setInputCloud(cloud_filtered_y);
+	pass.setFilterFieldName("z");
+	pass.setFilterLimits(.75, 2.5);
+	pass.filter(*cloud_filtered_z);
 
-    // Estimate point normals
-    ne.setSearchMethod (tree);
-    ne.setInputCloud (cloud_filtered_z);
-    ne.setKSearch (50);
-    ne.compute (*cloud_normals);
+	pcl::compute3DCentroid(*cloud_filtered_z, centroid);
+	xpos = centroid(0);
+	ypos = centroid(1);
+	zpos = centroid(2);
+	first_iteration = false;
+    }
+    else
+    {
+	pass.setInputCloud(cloud);
+	pass.setFilterFieldName("x");
+	pass.setFilterLimits(xpos_last-R_search, xpos_last+R_search);
+	pass.filter(*cloud_filtered_x);
 
-    // Perform normal optimization:
-    seg.setOptimizeCoefficients (true);
-    seg.setModelType (pcl::SACMODEL_SPHERE);
-    seg.setNormalDistanceWeight (0.1);
-    seg.setMethodType (pcl::SAC_RANSAC);
-    seg.setRadiusLimits (0.01,0.2);
-    seg.setMaxIterations (10000);
-    seg.setDistanceThreshold (0.05);
-    seg.setInputCloud (cloud_filtered_z);
-    seg.setInputNormals (cloud_normals);
-    // Obtain the sphere inliers and coefficients
-    seg.segment (*inliers_sphere, *coefficients_sphere);
-   
-    // Extract the sphere inliers from the input cloud
-    extract.setInputCloud (cloud_filtered_z);
-    extract.setIndices (inliers_sphere);
-    extract.setNegative (false);
+	pass.setInputCloud(cloud_filtered_x);
+	pass.setFilterFieldName("y");
+	pass.setFilterLimits(ypos_last-R_search, ypos_last+R_search);
+	pass.filter(*cloud_filtered_y);
 
-    // Convert the extracted sphere object to a new point cloud
-    extract.filter (*cloud_sphere);
+	pass.setInputCloud(cloud_filtered_y);
+	pass.setFilterFieldName("z");
+	pass.setFilterLimits(zpos_last-R_search, zpos_last+R_search);
+	pass.filter(*cloud_filtered_z);
 
-    // Get XYZ data:
-    // xpos = coefficients_sphere.x();
-    // ypos = coefficients_sphere.y();
-    // zpos = coefficients_sphere.z();
+	pcl::compute3DCentroid(*cloud_filtered_z, centroid);
+	xpos = centroid(0);
+	ypos = centroid(1);
+	zpos = centroid(2);
+    }
+
+    xpos_last = xpos;
+    ypos_last = ypos;
+    zpos_last = zpos;
 
     // Publish cloud:
-    pcl::toROSMsg(*cloud_sphere, *object1_cloud);
+    pcl::toROSMsg(*cloud_filtered_z, *object1_cloud);
     cloudpub_[0].publish(object1_cloud);
-
-    pcl::compute3DCentroid(*cloud_sphere, centroid);
-    xpos = centroid(0);
-    ypos = centroid(1);
-    zpos = centroid(2); 
 
     tf::Transform transform;
     transform.setOrigin(tf::Vector3(xpos, ypos, zpos));
