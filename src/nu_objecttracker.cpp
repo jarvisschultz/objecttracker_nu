@@ -97,7 +97,7 @@ public:
     float ypos = 0.0;
     float zpos = 0.0;
     float D_sphere = 0.05; //meters
-    float R_search = 3.0*D_sphere;
+    float R_search = 2.0*D_sphere;
 
     // ros::Time tstart = ros::Time::now();
     // std::cout << "start time:  " << tstart << "\n ";
