@@ -12,11 +12,16 @@
 // Includes
 //---------------------------------------------------------------------------
 
+#include <boost/thread/thread.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/condition.hpp>
+
 #include <iostream>
 
 #include <ros/ros.h>
 #include <Eigen/Dense>
 #include <tf/transform_broadcaster.h>
+#include <geometry_msgs/Point.h>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
@@ -33,6 +38,7 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
+
 //---------------------------------------------------------------------------
 // Global Variables
 //---------------------------------------------------------------------------
@@ -43,7 +49,9 @@ typedef pcl::PointXYZ PointT;
 float xpos_last = 0.0;
 float ypos_last = 0.0;
 float zpos_last = 0.0;
-bool first_iteration = true;
+bool locate = true;
+ros::Publisher point_pub;
+
 
 //---------------------------------------------------------------------------
 // Objects and Functions
@@ -99,6 +107,8 @@ public:
     float D_sphere = 0.05; //meters
     float R_search = 3.0*D_sphere;
 
+    geometry_msgs::Point point;
+
     // ros::Time tstart = ros::Time::now();
     // std::cout << "start time:  " << tstart << "\n ";
 
@@ -106,7 +116,7 @@ public:
     pcl::PassThrough<pcl::PointXYZ> pass;
 
     // Now we need to filter for the sphere:
-    if (first_iteration == true)
+    if (locate == true)
     {
 	pass.setInputCloud(cloud);
 	pass.setFilterFieldName("x");
@@ -127,7 +137,7 @@ public:
 	xpos = centroid(0);
 	ypos = centroid(1);
 	zpos = centroid(2);
-	first_iteration = false;
+	locate = false;
     }
     else
     {
@@ -146,10 +156,17 @@ public:
 	pass.setFilterLimits(zpos_last-R_search, zpos_last+R_search);
 	pass.filter(*cloud_filtered_z);
 
+	if(cloud_filtered_z->points.size() < 50) {
+	  locate = true;
+	  ROS_INFO ("We lost the object! ROS_INFO");
+	  printf("We lost the object!");
+	  return;
+	}
+	
 	pcl::compute3DCentroid(*cloud_filtered_z, centroid);
 	xpos = centroid(0);
 	ypos = centroid(1);
-	zpos = centroid(2);
+	zpos = centroid(2);	
     }
 
     xpos_last = xpos;
@@ -166,6 +183,16 @@ public:
 
     static tf::TransformBroadcaster br;
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "openni_depth_optical_frame", "object1"));
+
+    // set point message values and publish
+    point.x = xpos;
+    point.y = ypos;
+    point.z = zpos;
+    
+    ros::Time tstamp = ros::Time::now();
+    //point.header.stamp=tstamp;
+    //point.header.frame_id="/openni_depth_optical_frame";
+    point_pub.publish(point);
 
     // ros::Time tstop = ros::Time::now();
     // std::cout << "finish time:  " << tstop << "\n ";
@@ -201,6 +228,7 @@ int main(int argc, char **argv)
 {
   ros::init(argc, argv, "nu_objecttracker");
   ros::NodeHandle n;
+  point_pub = n.advertise<geometry_msgs::Point> ("object1_position", 100);
   printf("Starting Program...\n");
   BlobDetector detector;
   ros::spin();
