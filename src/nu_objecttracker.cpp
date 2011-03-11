@@ -120,12 +120,12 @@ public:
     {
 	pass.setInputCloud(cloud);
 	pass.setFilterFieldName("x");
-	pass.setFilterLimits(-1.0, 1.0);
+	pass.setFilterLimits(-2.0, 2.0);
 	pass.filter(*cloud_filtered_x);
 
 	pass.setInputCloud(cloud_filtered_x);
 	pass.setFilterFieldName("y");
-	pass.setFilterLimits(-0.5, 0.5);
+	pass.setFilterLimits(-0.5, 0.98);
 	pass.filter(*cloud_filtered_y);
 
 	pass.setInputCloud(cloud_filtered_y);
@@ -143,7 +143,7 @@ public:
     {
 	pass.setInputCloud(cloud);
 	pass.setFilterFieldName("x");
-	pass.setFilterLimits(xpos_last-R_search, xpos_last+R_search);
+	pass.setFilterLimits(xpos_last-2.0*R_search, xpos_last+2.0*R_search);
 	pass.filter(*cloud_filtered_x);
 
 	pass.setInputCloud(cloud_filtered_x);
@@ -156,7 +156,7 @@ public:
 	pass.setFilterLimits(zpos_last-R_search, zpos_last+R_search);
 	pass.filter(*cloud_filtered_z);
 
-	if(cloud_filtered_z->points.size() < 50) {
+	if(cloud_filtered_z->points.size() < 10) {
 	  locate = true;
 	  ROS_INFO ("We lost the object! ROS_INFO");
 	  printf("We lost the object!");
