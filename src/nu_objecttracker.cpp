@@ -1,3 +1,4 @@
+
 // nu_objecttracker.cpp
 // Jake Ware and Jarvis Schultz
 // Winter 2011
@@ -21,8 +22,8 @@
 #include <ros/ros.h>
 #include <Eigen/Dense>
 #include <tf/transform_broadcaster.h>
-#include <geometry_msgs/Point.h>
 #include <puppeteer_msgs/PointPlus.h>
+#include <puppeteer_msgs/speed_command.h>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
@@ -61,7 +62,7 @@ private:
   float ypos_last;
   float zpos_last;
   bool locate;
-
+  puppeteer_msgs::speed_command srv;
 
 public:
   ObjectTracker() {
