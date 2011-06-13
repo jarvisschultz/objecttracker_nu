@@ -24,6 +24,7 @@
 #include <tf/transform_broadcaster.h>
 #include <puppeteer_msgs/PointPlus.h>
 #include <puppeteer_msgs/speed_command.h>
+#include <geometry_msgs/Point.h>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
@@ -59,6 +60,7 @@ private:
   ros::Subscriber cloud_sub;
   ros::Publisher cloud_pub[2];
   ros::Publisher point_pub;
+  ros::Publisher pointplus_pub;
   float xpos_last;
   float ypos_last;
   float zpos_last;
@@ -68,7 +70,8 @@ private:
 public:
   ObjectTracker() {
     cloud_sub = n_.subscribe("/camera/depth/points", 1, &ObjectTracker::cloudcb, this);
-    point_pub = n_.advertise<puppeteer_msgs::PointPlus> ("object1_position", 100);
+    point_pub = n_.advertise<geometry_msgs::Point> ("object1_position_2", 100);
+    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("object1_position", 100);
     cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2> ("object1_cloud", 1);
     cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2> ("object2_cloud", 1);
   
@@ -103,10 +106,17 @@ public:
     float R_search = 2.0*D_sphere;
     //float R_search = 0.02;
 
-    puppeteer_msgs::PointPlus point;
+    // create new points to store object position
+    puppeteer_msgs::PointPlus pointplus;
+    geometry_msgs::Point point;
 
     // pass through filter
     pcl::PassThrough<pcl::PointXYZ> pass;
+
+    // set time stampe and frame id
+    ros::Time tstamp = ros::Time::now();
+    pointplus.header.stamp = tstamp;
+    pointplus.header.frame_id = "depth_optical_frame";
 
     // did we lose the object?
     if (locate == true)
@@ -138,22 +148,31 @@ public:
 	// are there enough points in the point cloud?
 	if(cloud_filtered_z->points.size() > POINT_THRESHOLD) {
 	  locate = false;  // We have re-found the object!
-	  
-	  // set values to publish
+
+	  // set point message values and publish
 	  point.x = xpos;
 	  point.y = ypos;
 	  point.z = zpos;
-	  point.error = false;
-	  point_pub.publish(point);	    
+	  
+	  point_pub.publish(pointplus);
+	  
+	  // set values to publish
+	  pointplus.x = xpos;
+	  pointplus.y = ypos;
+	  pointplus.z = zpos;
+	  pointplus.error = false;
+
+	  pointplus_pub.publish(pointplus);	    
 	}
 	// otherwise we should publish a blank centroid position with an error flag
 	else {
 	  // set values to publish
-	  point.x = 0.0;
-	  point.y = 0.0;
-	  point.z = 0.0;
-	  point.error = true;
-	  point_pub.publish(point);	    
+	  pointplus.x = 0.0;
+	  pointplus.y = 0.0;
+	  pointplus.z = 0.0;
+	  pointplus.error = true;
+
+	  pointplus_pub.publish(pointplus);	    
 	}
       }
     // otherwise find the centroid again
@@ -190,11 +209,12 @@ public:
 	ROS_WARN("Lost Object at: x = %f  y = %f  z = %f\n",
 		 xpos_last,ypos_last,zpos_last);
 	  
-	point.x = 0.0;
-	point.y = 0.0;
-	point.z = 0.0;
-	point.error = true;
-	point_pub.publish(point);
+	pointplus.x = 0.0;
+	pointplus.y = 0.0;
+	pointplus.z = 0.0;
+	pointplus.error = true;
+
+	pointplus_pub.publish(pointplus);
 	  	  
 	return;
       }
@@ -227,17 +247,22 @@ public:
       point.x = xpos;
       point.y = ypos;
       point.z = zpos;
-      point.error = false;
+    
+      point_pub.publish(pointplus);
 
-      ros::Time tstamp = ros::Time::now();
-      point_pub.publish(point);
+      // set pointplus message values and publish
+      pointplus.x = xpos;
+      pointplus.y = ypos;
+      pointplus.z = zpos;
+      pointplus.error = false;
+
+      pointplus_pub.publish(pointplus);
     }
 
     xpos_last = xpos;
     ypos_last = ypos;
     zpos_last = zpos;
-
-    
+  
     /*
     // write point clouds out to file
     pcl::io::savePCDFileASCII ("test1_cloud.pcd", *cloud);

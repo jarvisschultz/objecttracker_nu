@@ -13,6 +13,7 @@
   <depend package="pcl"/>
   <depend package="tf"/>
   <depend package="puppeteer_msgs"/>
+  <depend package="geometry_msgs"/>
 </package>
 
 
