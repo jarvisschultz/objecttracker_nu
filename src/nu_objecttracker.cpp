@@ -124,12 +124,12 @@ public:
 
 		pass.setInputCloud(cloud);
 		pass.setFilterFieldName("x");
-		pass.setFilterLimits(-0.95, 0.95);
+		pass.setFilterLimits(-0.80, 0.80);
 		pass.filter(*cloud_filtered_x);
 
 		pass.setInputCloud(cloud_filtered_x);
 		pass.setFilterFieldName("y");
-		pass.setFilterLimits(-.60, 1.40);
+		pass.setFilterLimits(-.50, 1.40);
 		pass.filter(*cloud_filtered_y);
 
 		pass.setInputCloud(cloud_filtered_y);
@@ -256,23 +256,23 @@ public:
 	    pcl::io::savePCDFileASCII ("test1_cloud.pcd", *cloud);
 	    */
 
-	    pass.setInputCloud(cloud);
-	    pass.setFilterFieldName("x");
-	    pass.setFilterLimits(-1.9, 0.95);
-	    pass.filter(*cloud_filtered_x);
+	    // pass.setInputCloud(cloud);
+	    // pass.setFilterFieldName("x");
+	    // pass.setFilterLimits(-.80, 0.80);
+	    // pass.filter(*cloud_filtered_x);
 
-	    pass.setInputCloud(cloud_filtered_x);
-	    pass.setFilterFieldName("y");
-	    pass.setFilterLimits(-.65, 1.40);
-	    pass.filter(*cloud_filtered_y);
+	    // pass.setInputCloud(cloud_filtered_x);
+	    // pass.setFilterFieldName("y");
+	    // pass.setFilterLimits(-.60, 1.40);
+	    // pass.filter(*cloud_filtered_y);
 
-	    pass.setInputCloud(cloud_filtered_y);
-	    pass.setFilterFieldName("z");
-	    pass.setFilterLimits(0, 3.50);
-	    pass.filter(*cloud_filtered_z);
+	    // pass.setInputCloud(cloud_filtered_y);
+	    // pass.setFilterFieldName("z");
+	    // pass.setFilterLimits(0, 3.50);
+	    // pass.filter(*cloud_filtered_z);
 
-	    pcl::toROSMsg(*cloud_filtered_z, *object2_cloud);
-	    cloud_pub[1].publish(object2_cloud);
+	    // pcl::toROSMsg(*cloud_filtered_z, *object2_cloud);
+	    // cloud_pub[1].publish(object2_cloud);
 	}
 };
 
