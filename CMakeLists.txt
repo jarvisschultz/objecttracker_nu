@@ -30,3 +30,4 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 #target_link_libraries(example ${PROJECT_NAME})
 
 rosbuild_add_executable(nu_objecttracker src/nu_objecttracker.cpp)
+rosbuild_add_executable(robot_tracker src/robot_tracker.cpp)

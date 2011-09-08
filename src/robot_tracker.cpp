@@ -129,7 +129,7 @@ public:
 
 		pass.setInputCloud(cloud_filtered_x);
 		pass.setFilterFieldName("y");
-		pass.setFilterLimits(-.60, 1.40);
+		pass.setFilterLimits(-.62, -.55);
 		pass.filter(*cloud_filtered_y);
 
 		pass.setInputCloud(cloud_filtered_y);
