@@ -62,6 +62,8 @@ private:
     ros::Publisher cloud_pub[2];
     ros::Publisher point_pub;
     ros::Publisher pointplus_pub;
+    ros::Publisher point_pub2;
+    ros::Publisher pointplus_pub2;
     float xpos_last;
     float ypos_last;
     float zpos_last;
@@ -74,6 +76,8 @@ public:
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1, &ObjectTracker::cloudcb, this);
 	    point_pub = n_.advertise<geometry_msgs::Point> ("object1_position_2", 100);
 	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("object1_position", 100);
+	    point_pub2 = n_.advertise<geometry_msgs::Point> ("object2_position_2", 100);
+	    pointplus_pub2 = n_.advertise<puppeteer_msgs::PointPlus> ("object2_position", 100);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2> ("object1_cloud", 1);
 	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2> ("object2_cloud", 1);
   
@@ -103,7 +107,8 @@ public:
 	    float xpos = 0.0;
 	    float ypos = 0.0;
 	    float zpos = 0.0;
-	    float D_sphere = 0.05; //meters
+	    // float D_sphere = 0.05; //meters
+	    float D_sphere = 0.1; //meters
 	    float R_search = 2.0*D_sphere;
 
 	    // create new points to store object position
@@ -121,20 +126,19 @@ public:
 	    // did we lose the object?
 	    if (locate == true)
 	    {
-
 		pass.setInputCloud(cloud);
 		pass.setFilterFieldName("x");
-		pass.setFilterLimits(-0.95, 0.95);
+		pass.setFilterLimits(-0.80, 0.80);
 		pass.filter(*cloud_filtered_x);
 
 		pass.setInputCloud(cloud_filtered_x);
 		pass.setFilterFieldName("y");
-		pass.setFilterLimits(-.62, -.55);
+		pass.setFilterLimits(-5.0, 0.5);
 		pass.filter(*cloud_filtered_y);
 
 		pass.setInputCloud(cloud_filtered_y);
 		pass.setFilterFieldName("z");
-		pass.setFilterLimits(0, 3.50);
+		pass.setFilterLimits(0, 3.25);
 		pass.filter(*cloud_filtered_z);
     
 		pcl::compute3DCentroid(*cloud_filtered_z, centroid);
@@ -142,10 +146,10 @@ public:
 		ypos = centroid(1);
 		zpos = centroid(2);
 
-		// Publish cloud:
+		// // Publish cloud:
 		pcl::toROSMsg(*cloud_filtered_z, *object2_cloud);
 		cloud_pub[1].publish(object2_cloud);
-	
+		
 		// are there enough points in the point cloud?
 		if(cloud_filtered_z->points.size() > POINT_THRESHOLD)
 		{
@@ -164,9 +168,10 @@ public:
 		    pointplus.z = zpos;
 		    pointplus.error = false;
 
-		    pointplus_pub.publish(pointplus);	    
+		    pointplus_pub.publish(pointplus);
 		}
-		// otherwise we should publish a blank centroid position with an error flag
+		// otherwise we should publish a blank centroid
+		// position with an error flag
 		else
 		{
 		    // set values to publish
@@ -210,7 +215,7 @@ public:
 		    pointplus.error = true;
 
 		    pointplus_pub.publish(pointplus);
-	  	  
+		    	  	  
 		    return;
 		}
 	
@@ -218,7 +223,7 @@ public:
 		xpos = centroid(0);
 		ypos = centroid(1);
 		zpos = centroid(2);
-		
+
 		pcl::toROSMsg(*cloud_filtered_z, *object1_cloud);
 		cloud_pub[0].publish(object1_cloud);
 
@@ -245,6 +250,63 @@ public:
 		pointplus.error = false;
 
 		pointplus_pub.publish(pointplus);
+
+		
+		// Now let's calculate the mean and standard
+		// deviation of the z-values
+		// ROS_INFO("Number of points = %d",(int) cloud_filtered_z->points.size());
+		// ROS_INFO("FirstPoint = %f",cloud_filtered_z->points.at(2).x);
+		static int j = 0;
+		int i = 0;
+		std::vector<float> zvals, yvals;
+		static std::vector<float> means, stdevs;
+		double mean, stdev, height;
+		bool print_flag = true;
+
+		if(j < 200)
+		{
+		    for(i = 0; i<(int) cloud_filtered_z->points.size(); i++)
+		    {
+			yvals.push_back(cloud_filtered_z->points.at(i).y);
+		    }
+		    pcl::getMeanStdDev(yvals, height, stdev);
+		    ROS_INFO("height = %f",height);		    
+		    for(i = 0; i<(int) cloud_filtered_z->points.size(); i++)
+		    {
+			if ((fabs(cloud_filtered_z->points.at(i).y) < fabs(height)+0.001) &&
+			    (fabs(cloud_filtered_z->points.at(i).y) > fabs(height)-0.001))
+			{
+			    zvals.push_back(cloud_filtered_z->points.at(i).z);
+			    if(print_flag == true)
+			    {
+				ROS_INFO("Current pt height = %f",
+					 fabs(cloud_filtered_z->points.at(i).y));
+				ROS_INFO("Limits on height = %f\t%f",
+					 fabs(height)+0.01, fabs(height)-0.01);
+				print_flag = false;
+			    }
+			}
+		    }
+		    ROS_INFO("Original PC Size = %d",(int) cloud_filtered_z->points.size());
+		    ROS_INFO("New PC Size = %d", (int) zvals.size());
+		    if( (int) zvals.size() > 100)
+		    {
+			pcl::getMeanStdDev(zvals, mean, stdev);
+			means.push_back(mean);
+			stdevs.push_back(stdev);
+			ROS_INFO("z mean = %f\tzstdev = %f",mean,stdev);
+			j++;
+		    }
+		}
+		else if (j == 200)
+		{
+		    pcl::getMeanStdDev(means, mean, stdev);
+		    ROS_INFO("FINAL z mean = %f",mean);
+		    pcl::getMeanStdDev(stdevs, mean, stdev);
+		    ROS_INFO("FINAL z stdev = %f",mean);
+		    j++;
+		}
+
 	    }
 
 	    xpos_last = xpos;
@@ -258,17 +320,17 @@ public:
 
 	    pass.setInputCloud(cloud);
 	    pass.setFilterFieldName("x");
-	    pass.setFilterLimits(-1.9, 0.95);
+	    pass.setFilterLimits(-.80, 0.80);
 	    pass.filter(*cloud_filtered_x);
 
 	    pass.setInputCloud(cloud_filtered_x);
 	    pass.setFilterFieldName("y");
-	    pass.setFilterLimits(-.65, 1.40);
+	    pass.setFilterLimits(-5.0, 1.00);
 	    pass.filter(*cloud_filtered_y);
 
 	    pass.setInputCloud(cloud_filtered_y);
 	    pass.setFilterFieldName("z");
-	    pass.setFilterLimits(0, 3.50);
+	    pass.setFilterLimits(0, 3.25);
 	    pass.filter(*cloud_filtered_z);
 
 	    pcl::toROSMsg(*cloud_filtered_z, *object2_cloud);
