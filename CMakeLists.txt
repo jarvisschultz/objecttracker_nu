@@ -29,5 +29,12 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 #rosbuild_add_executable(example examples/example.cpp)
 #target_link_libraries(example ${PROJECT_NAME})
 
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
+
+target_link_libraries (planar_segmentation ${PCL_LIBRARIES})
+
 rosbuild_add_executable(nu_objecttracker src/nu_objecttracker.cpp)
 rosbuild_add_executable(robot_tracker src/robot_tracker.cpp)
+rosbuild_add_executable(system_calibrator src/orientation_calibration.cpp)
