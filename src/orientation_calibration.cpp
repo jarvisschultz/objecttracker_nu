@@ -28,6 +28,7 @@
 #include <log4cxx/logger.h>
 #include <Eigen/Dense>
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
 #include <puppeteer_msgs/PointPlus.h>
 #include <puppeteer_msgs/speed_command.h>
 #include <geometry_msgs/Point.h>
@@ -224,7 +225,7 @@ public:
 	    // set time stamp and frame id
 	    ros::Time tstamp = ros::Time::now();
 	    pointplus.header.stamp = tstamp;
-	    pointplus.header.frame_id = "depth_optical_frame";
+	    pointplus.header.frame_id = "openni_depth_optical_frame";
 
 	    // did we lose the object?
 	    if (locate == true)
@@ -337,7 +338,7 @@ public:
 		static tf::TransformBroadcaster br;
 		br.sendTransform(tf::StampedTransform
 				 (transform,ros::Time::now(),
-				  "openni_rgb_optical_frame","object1"));
+				  "openni_depth_optical_frame","object1"));
 
 		// set point message values and publish
 		point.x = xpos;
@@ -436,7 +437,7 @@ public:
 					     btVector3(orig(0),orig(1),orig(2)));
 	    
 	    br.sendTransform(tf::StampedTransform
-			     (tr, ros::Time::now(), "openni_rgb_optical_frame",
+			     (tr, ros::Time::now(), "openni_depth_optical_frame",
 			      "oriented_optimization_frame"));
 
 	    if (complete_flag == true)
@@ -456,10 +457,9 @@ public:
 	    std::size_t found = working_dir.find("bin");
 	    std::string tmp_dir = working_dir.substr(0, found);
 	    working_dir = tmp_dir+"data/";
-
+	    filename = working_dir + "calibration_params.txt";
+		
 	    file.open(filename.c_str());
-
-	    cout << filename << "\n";
 
 	    ROS_DEBUG("Converting and writing");
 	    // First let's write out the rotation matrix:
@@ -469,6 +469,32 @@ public:
 	    // Now write out the transformation vector:
 	    Eigen::Vector3f orig(0.0,0.0,0.0);
 	    file << "\n" << orig << std::endl;
+
+	    file.close();
+
+	    // Now generate the launch file
+	    working_dir = tmp_dir+"launch/";
+	    filename = working_dir + "optimization_frame_broadcaster.launch";
+	    file.open(filename.c_str());
+	    file << "<launch>\n"
+		 << "\t<node pkg=\"tf\" type=\"static_transform_publisher\" "
+		 << "name=\"optimization_frame_broadcaster\"\n";
+
+	    // get the rotation matrix into a quaternion
+	    // tf::StampedTransform t;
+	    // tf::TransformListener listener;
+	    // listener.lookupTransform ( "openni_depth_optical_frame",
+	    // 			  "oriented_optimization_frame",
+	    // 			  ros::Time::now(), t);
+	    Eigen::Quaternion<float> q;
+	    q = Eigen::Quaternionf(Rot);
+	    file << "args=\"" << orig(0) << " "
+		 << orig (1) << " " << orig(2) << " " 
+		 << q.x() << " " << q.y() << " "
+		 << q.z() << " " << q.w() << " "
+		 << "openni_depth_optical_frame "
+		 << "oriented_optimization_frame "
+		 << "100" << "\" />" << "\n" << "</launch>";	    	    
 
 	    ROS_DEBUG("Killing node");
 	    file.close();

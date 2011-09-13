@@ -345,10 +345,10 @@ public:
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "object_tracker");
+  ros::init(argc, argv, "robot_tracker");
   ros::NodeHandle n;
 
-  ROS_INFO("Starting Object Tracker...\n");
+  ROS_INFO("Starting Robot Tracker...\n");
   ObjectTracker tracker;
   
   ros::spin();
