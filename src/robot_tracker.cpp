@@ -252,60 +252,60 @@ public:
 		pointplus_pub.publish(pointplus);
 
 		
-		// Now let's calculate the mean and standard
-		// deviation of the z-values
-		// ROS_INFO("Number of points = %d",(int) cloud_filtered_z->points.size());
-		// ROS_INFO("FirstPoint = %f",cloud_filtered_z->points.at(2).x);
-		static int j = 0;
-		int i = 0;
-		std::vector<float> zvals, yvals;
-		static std::vector<float> means, stdevs;
-		double mean, stdev, height;
-		bool print_flag = true;
+	    // 	// Now let's calculate the mean and standard
+	    // 	// deviation of the z-values
+	    // 	// ROS_INFO("Number of points = %d",(int) cloud_filtered_z->points.size());
+	    // 	// ROS_INFO("FirstPoint = %f",cloud_filtered_z->points.at(2).x);
+	    // 	static int j = 0;
+	    // 	int i = 0;
+	    // 	std::vector<float> zvals, yvals;
+	    // 	static std::vector<float> means, stdevs;
+	    // 	double mean, stdev, height;
+	    // 	bool print_flag = true;
 
-		if(j < 200)
-		{
-		    for(i = 0; i<(int) cloud_filtered_z->points.size(); i++)
-		    {
-			yvals.push_back(cloud_filtered_z->points.at(i).y);
-		    }
-		    pcl::getMeanStdDev(yvals, height, stdev);
-		    ROS_INFO("height = %f",height);		    
-		    for(i = 0; i<(int) cloud_filtered_z->points.size(); i++)
-		    {
-			if ((fabs(cloud_filtered_z->points.at(i).y) < fabs(height)+0.001) &&
-			    (fabs(cloud_filtered_z->points.at(i).y) > fabs(height)-0.001))
-			{
-			    zvals.push_back(cloud_filtered_z->points.at(i).z);
-			    if(print_flag == true)
-			    {
-				ROS_INFO("Current pt height = %f",
-					 fabs(cloud_filtered_z->points.at(i).y));
-				ROS_INFO("Limits on height = %f\t%f",
-					 fabs(height)+0.01, fabs(height)-0.01);
-				print_flag = false;
-			    }
-			}
-		    }
-		    ROS_INFO("Original PC Size = %d",(int) cloud_filtered_z->points.size());
-		    ROS_INFO("New PC Size = %d", (int) zvals.size());
-		    if( (int) zvals.size() > 100)
-		    {
-			pcl::getMeanStdDev(zvals, mean, stdev);
-			means.push_back(mean);
-			stdevs.push_back(stdev);
-			ROS_INFO("z mean = %f\tzstdev = %f",mean,stdev);
-			j++;
-		    }
-		}
-		else if (j == 200)
-		{
-		    pcl::getMeanStdDev(means, mean, stdev);
-		    ROS_INFO("FINAL z mean = %f",mean);
-		    pcl::getMeanStdDev(stdevs, mean, stdev);
-		    ROS_INFO("FINAL z stdev = %f",mean);
-		    j++;
-		}
+	    // 	if(j < 200)
+	    // 	{
+	    // 	    for(i = 0; i<(int) cloud_filtered_z->points.size(); i++)
+	    // 	    {
+	    // 		yvals.push_back(cloud_filtered_z->points.at(i).y);
+	    // 	    }
+	    // 	    pcl::getMeanStdDev(yvals, height, stdev);
+	    // 	    ROS_INFO("height = %f",height);		    
+	    // 	    for(i = 0; i<(int) cloud_filtered_z->points.size(); i++)
+	    // 	    {
+	    // 		if ((fabs(cloud_filtered_z->points.at(i).y) < fabs(height)+0.001) &&
+	    // 		    (fabs(cloud_filtered_z->points.at(i).y) > fabs(height)-0.001))
+	    // 		{
+	    // 		    zvals.push_back(cloud_filtered_z->points.at(i).z);
+	    // 		    if(print_flag == true)
+	    // 		    {
+	    // 			ROS_INFO("Current pt height = %f",
+	    // 				 fabs(cloud_filtered_z->points.at(i).y));
+	    // 			ROS_INFO("Limits on height = %f\t%f",
+	    // 				 fabs(height)+0.01, fabs(height)-0.01);
+	    // 			print_flag = false;
+	    // 		    }
+	    // 		}
+	    // 	    }
+	    // 	    ROS_INFO("Original PC Size = %d",(int) cloud_filtered_z->points.size());
+	    // 	    ROS_INFO("New PC Size = %d", (int) zvals.size());
+	    // 	    if( (int) zvals.size() > 100)
+	    // 	    {
+	    // 		pcl::getMeanStdDev(zvals, mean, stdev);
+	    // 		means.push_back(mean);
+	    // 		stdevs.push_back(stdev);
+	    // 		ROS_INFO("z mean = %f\tzstdev = %f",mean,stdev);
+	    // 		j++;
+	    // 	    }
+	    // 	}
+	    // 	else if (j == 200)
+	    // 	{
+	    // 	    pcl::getMeanStdDev(means, mean, stdev);
+	    // 	    ROS_INFO("FINAL z mean = %f",mean);
+	    // 	    pcl::getMeanStdDev(stdevs, mean, stdev);
+	    // 	    ROS_INFO("FINAL z stdev = %f",mean);
+	    // 	    j++;
+	    // 	}
 
 	    }
 

@@ -16,16 +16,23 @@
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition.hpp>
+#include <kbhit.h>
 
 #include <iostream>
+#include <sstream>
+#include <fstream>
+#include <string>
 
 #include <ros/ros.h>
+#include <ros/console.h>
+#include <log4cxx/logger.h>
 #include <Eigen/Dense>
 #include <tf/transform_broadcaster.h>
 #include <puppeteer_msgs/PointPlus.h>
 #include <puppeteer_msgs/speed_command.h>
 #include <geometry_msgs/Point.h>
 
+#include <pcl/common/transform.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/passthrough.h>
@@ -42,6 +49,7 @@
 
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
+#include <assert.h>
 
 
 //---------------------------------------------------------------------------
@@ -49,7 +57,7 @@
 //---------------------------------------------------------------------------
 #define POINT_THRESHOLD (5)
 typedef pcl::PointXYZ PointT;
-
+std::string working_dir;
 
 //---------------------------------------------------------------------------
 // Objects and Functions
@@ -71,6 +79,7 @@ private:
     float zpos_last;
     bool locate;
     puppeteer_msgs::speed_command srv;
+    bool complete_flag;
 
 public:
     ObjectTracker()
@@ -88,17 +97,22 @@ public:
 	    ypos_last = 0.0;
 	    zpos_last = 0.0;
 	    locate = true;
+	    complete_flag = false;
 	}
 
     
-    void planar_inliers(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
-			pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out)
+    Eigen::Vector3f planar_inliers(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
+				   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out)
 	{
+	    static int call_count = 0;
 	    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
 	    pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
 	    pcl::ExtractIndices<pcl::PointXYZ> extract;
 	    sensor_msgs::PointCloud2::Ptr
 		filtered_cloud (new sensor_msgs::PointCloud2 ());
+	    Eigen::Vector3f mean_normal;
+
+	    ROS_DEBUG("Starting planar_inliers");
 	    
 	    // Create the segmentation object
 	    pcl::SACSegmentation<pcl::PointXYZ> seg;
@@ -112,17 +126,21 @@ public:
 	    seg.setInputCloud (cloud_in->makeShared ());
 	    // Inliers has indices in cloud_in belonging to plane,
 	    // coefficients has plane eqn coeffs i.e. ax+by+cz+d=0
+	    ROS_DEBUG("About to segment planar model");
 	    seg.segment (*inliers, *coefficients);
 
+	    ROS_DEBUG("Extracting new cloud");
 	    extract.setInputCloud(cloud_in);
 	    extract.setIndices(inliers);
 	    extract.setNegative(false);
 	    extract.filter(*cloud_out);
 
+	    ROS_DEBUG("Publishing new point cloud");
 	    // Now, we can publish the cloud:
 	    pcl::toROSMsg(*cloud_out, *filtered_cloud);
 	    cloud_pub[2].publish(filtered_cloud);
 
+	    ROS_DEBUG("Setting up normal estimation parameters");
 	    // Create a KD-Tree
 	    pcl::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::KdTreeFLANN<pcl::PointXYZ>);
 	    tree->setInputCloud (cloud_out);
@@ -138,12 +156,14 @@ public:
 	    mls.setSearchMethod (tree);
 	    mls.setSearchRadius (0.03);
 
+	    ROS_DEBUG("Finding normals");
 	    // Filter:
 	    mls.reconstruct(mls_points);
 
+	    ROS_DEBUG("Finding mean value");
 	    // Now, let's find the mean normal value:
-	    double avgnormal[3] = {0.0,0.0,0.0};
-	    double avgcounts[3] = {0.0,0.0,0.0};
+	    float avgnormal[3] = {0.0,0.0,0.0};
+	    float avgcounts[3] = {0.0,0.0,0.0};
 	    for(int i=0; i < (int) mls_normals->points.size(); i++)
 	    {
 		for(int j=0; j<3; j++)
@@ -155,11 +175,18 @@ public:
 	    }
 	    for(int j=0; j<3; j++)
 		avgnormal[j] /= avgcounts[j];
-
+	    call_count++;
+	    printf("Num = %3d     ", call_count);
 	    std::cout <<
-		"X Average Normal = " << avgnormal[0] << "\t"
-		"Y Average Normal = " << avgnormal[1] << "\t"
-		"Z Average Normal = " << avgnormal[2] << "\n";
+		"X Normal = " << avgnormal[0] << "\t" <<
+		"Y Normal = " << avgnormal[1] << "\t" << 
+		"Z Normal = " << avgnormal[2] << "\n";
+
+	    ROS_DEBUG("Setting mean_normal vector");
+	    mean_normal << avgnormal[0], avgnormal[1], avgnormal[2];
+
+	    ROS_DEBUG("Leaving planar_inliers");
+	    return(mean_normal);
 	}
 
     // this function gets called every time new pcl data comes in
@@ -333,50 +360,145 @@ public:
 	    zpos_last = zpos;
 
 	    // Filter the segmented cloud to get the planar inliers:
-	    static int call_flag = 0;
-	    if (call_flag%5 == 0)
-		planar_inliers(cloud_filtered_z, planar_cloud);
+	    static int call_flag = 0, call_count = 0;
+	    static bool calibrate_flag = true;
+	    static Eigen::Vector3f current_normal(0.0,0.0,0.0),
+		count_normal(0.0,0.0,0.0);
+	    
+	    if (call_flag%5 == 0 && calibrate_flag == true)
+	    {
+		ROS_DEBUG("Calling planar_inliers for the %d time",call_count+1);
+		current_normal = planar_inliers(cloud_filtered_z, planar_cloud);
+		ROS_DEBUG("Incrementing counts and adding vectors");
+		call_count++;
+		count_normal += current_normal;
+	    }
 	    call_flag++;
+	    if (call_count == 20)
+	    {
+	    	count_normal /= call_count;
+	    	std::cout << "Mean Normal:\n" << count_normal << std::endl;
+	    	call_count++;
+		calibrate_flag = false;
 
-	    /*
-	    // write point clouds out to file
-	    pcl::io::savePCDFileASCII ("test1_cloud.pcd", *cloud);
-	    */
+		// Now we can call the function generates a transform
+		// based on this vector
+		generate_transform(count_normal);
+	    }
+	    else if (call_count == 21)
+	    {
+		complete_flag = true;
+		ROS_INFO_ONCE("Calibration Successfully Completed");
+		ROS_INFO_ONCE("Press any button to kill node and write out transformation data");
+		generate_transform(count_normal);
+	    }
 
-	    // pass.setInputCloud(cloud);
-	    // pass.setFilterFieldName("x");
-	    // pass.setFilterLimits(-.80, 0.80);
-	    // pass.filter(*cloud_filtered_x);
-
-	    // pass.setInputCloud(cloud_filtered_x);
-	    // pass.setFilterFieldName("y");
-	    // pass.setFilterLimits(-5.0, 1.00);
-	    // pass.filter(*cloud_filtered_y);
-
-	    // pass.setInputCloud(cloud_filtered_y);
-	    // pass.setFilterFieldName("z");
-	    // pass.setFilterLimits(0, 3.25);
-	    // pass.filter(*cloud_filtered_z);
-
-	    // pcl::toROSMsg(*cloud_filtered_z, *object2_cloud);
-	    // cloud_pub[1].publish(object2_cloud);
+		
+	    
 	}
+
+    void generate_transform(Eigen::Vector3f normal)
+	{
+	    Eigen::Vector3f xvec,yvec,zvec;
+	    Eigen::Affine3f t;
+	    Eigen::Vector3f orig(0.0,0.0,0.0);
+
+	    if( normal(2) >= 0)
+		// Then normal is into vertical surface
+		zvec = normal;
+	    else
+		// Normal is towards kinect
+		zvec = -normal;
+	    xvec << 1.0,0.0,0.0;
+	    yvec << zvec.cross(xvec);
+
+	    // current vectors are aligned with gravity, but let's now
+	    // tranform the data into the same coordinate system that
+	    // I use in my optimizations
+	    ROS_DEBUG("Getting Transformation as Affine3f");
+	    pcl::getTransformationFromTwoUnitVectorsAndOrigin(
+	    	yvec, zvec, orig, t);
+
+	    // Now let's convert that to a tf, and create a tf publisher:
+	    // tf::Transform transform;
+	    static tf::TransformBroadcaster br;
+	    // transform.setOrigin(tf::Vector3(orig(0),orig(1),orig(2)));
+	    ROS_DEBUG("Extract Rotation Matrix");
+	    Eigen::Matrix3f Rot = t.linear();
+	    // transform.setRotation(btMatrix3x3(Rot(1,1),Rot(1,2),Rot(1,3),
+	    // 				      Rot(2,1),Rot(2,2),Rot(2,3),
+	    // 				      Rot(3,1),Rot(3,2),Rot(3,3)));
+	    ROS_DEBUG("Instantiate a new tf Transform");
+	    tf::Transform tr = tf::Transform(btMatrix3x3
+					     (Rot(0,0),Rot(0,1),Rot(0,2),
+					      Rot(1,0),Rot(1,1),Rot(1,2),
+					      Rot(2,0),Rot(2,1),Rot(2,2)),
+					     btVector3(orig(0),orig(1),orig(2)));
+	    
+	    br.sendTransform(tf::StampedTransform
+			     (tr, ros::Time::now(), "openni_rgb_optical_frame",
+			      "oriented_optimization_frame"));
+
+	    if (complete_flag == true)
+	    {
+		if (kbhit())
+		    write_calibration(t);
+	    }
+	}
+
+    void write_calibration(Eigen::Affine3f tr)
+	{
+	    ROS_DEBUG("About to write text file");
+	    // This function writes out a calibrated transformation to
+	    // a text file that can be read by other tracking codes
+	    std::ofstream file;
+	    std::string filename;
+	    std::size_t found = working_dir.find("bin");
+	    std::string tmp_dir = working_dir.substr(0, found);
+	    working_dir = tmp_dir+"data/";
+
+	    file.open(filename.c_str());
+
+	    cout << filename << "\n";
+
+	    ROS_DEBUG("Converting and writing");
+	    // First let's write out the rotation matrix:
+	    Eigen::Matrix3f Rot = tr.linear();
+	    file << Rot << std::endl;
+
+	    // Now write out the transformation vector:
+	    Eigen::Vector3f orig(0.0,0.0,0.0);
+	    file << "\n" << orig << std::endl;
+
+	    ROS_DEBUG("Killing node");
+	    file.close();
+	    ros::shutdown();			    
+	}
+
+		      
+	    
 };
 
 
 //---------------------------------------------------------------------------
-// Main
+// main
 //---------------------------------------------------------------------------
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "object_tracker");
-  ros::NodeHandle n;
-
-  ROS_INFO("Starting Object Tracker...\n");
-  ObjectTracker tracker;
+    working_dir = argv[0];
+    
+    ROSCONSOLE_AUTOINIT;
+    ros::init(argc, argv, "system_calibrator");
+    // log4cxx::LoggerPtr my_logger = log4cxx::Logger::getLogger(ROSCONSOLE_DEFAULT_NAME);
+    // my_logger->setLevel(ros::console::g_level_lookup[ros::console::levels::Debug]);
+    
+    ros::NodeHandle n;
+    
+    ROS_INFO("Starting Calibrations...\n");
+    ObjectTracker tracker;
+    
+    ros::spin();
   
-  ros::spin();
-  
-  return 0;
+    return 0;
 }

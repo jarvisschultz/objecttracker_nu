@@ -1,0 +1,7 @@
+<launch>
+  <arg name="debug" default="false"/>
+  <arg if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args"/>
+  <arg unless="$(arg debug)" name="launch_prefix" value=""/>
+  <node pkg="objecttracker_nu" type="system_calibrator" name="calibrate_node" output="screen" launch-prefix="$(arg launch_prefix)">
+  </node>
+</launch>
