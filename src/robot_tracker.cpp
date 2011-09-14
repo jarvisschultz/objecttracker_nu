@@ -74,7 +74,6 @@ private:
     puppeteer_msgs::speed_command srv;
     Eigen::Affine3f const_transform;
     tf::Transform tf;
-    tf::Transform tf2;
 
 public:
     ObjectTracker()
@@ -96,64 +95,23 @@ public:
 		ros::Time now=ros::Time::now();
 		listener.waitForTransform("/openni_depth_optical_frame",
 					 "/oriented_optimization_frame",
-					  now, ros::Duration(5.0));
-		listener.lookupTransform("/openni_depth_optical_frame",
-					 "/oriented_optimization_frame",
+					  now, ros::Duration(1.0));
+		listener.lookupTransform("/oriented_optimization_frame",
+					 "/openni_depth_optical_frame",
 					 ros::Time(0), t);
+		tf = t;	    
+
 	    }
 	    catch (tf::TransformException ex)
 	    {
 		ROS_ERROR("%s", ex.what());
 		ros::shutdown();
 	    }
-	    ROS_INFO("Generating constant transform SE(3) Matrix");
-	    Eigen::Matrix4f tmp_transform;
-	    tf = t;	    
-	    pcl_ros::transformAsMatrix(tf, tmp_transform);
-	    const_transform.matrix() = tmp_transform;
-
-	    std::cout << const_transform.linear() << std::endl;
-	    std::cout << const_transform.translation() << std::endl;
-
-	    listener.lookupTransform("/oriented_optimization_frame",
-				     "/openni_depth_optical_frame",
-				     ros::Time(0), t);
-	    tf2 = t;
-	    
 	}
 
     // this function gets called every time new pcl data comes in
     void cloudcb(const sensor_msgs::PointCloud2ConstPtr &scan)
 	{
-	    sensor_msgs::PointCloud2::Ptr
-		robot_cloud (new sensor_msgs::PointCloud2 ()),
-		robot_cloud_filtered (new sensor_msgs::PointCloud2 ());    
-
-	    pcl::PointCloud<pcl::PointXYZ>::Ptr
-		cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
-		cloud_transformed (new pcl::PointCloud<pcl::PointXYZ> ()),
-		cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
-
-	    sensor_msgs::PointCloud2::Ptr scan_transformed (new sensor_msgs::PointCloud2());
-	    pcl_ros::transformPointCloud("/oriented_optimization_frame",
-	    				 tf2, *scan, *scan_transformed);
-	    scan_transformed->header.frame_id = "/oriented_optimization_frame";
-
-	    // cloud_pub[1].publish(scan_transformed);
-
-	    // pcl::fromROSMsg(*scan, *cloud);
-	    // pcl::fromROSMsg(*scan_transformed, *cloud_transformed);
-	    // Eigen::Vector4f centroid, centroid_transformed;
-	    // pcl::compute3DCentroid(*cloud, centroid);
-	    // pcl::compute3DCentroid(*cloud_transformed, centroid_transformed);
-
-	    // ROS_INFO("Original Cloud Centroid = %f %f %f",
-	    // 	     centroid(0), centroid(1), centroid(2));
-	    // ROS_INFO("Transfor Cloud Centroid = %f %f %f",
-	    // 	     centroid_transformed(0), centroid_transformed(1),
-	    // 	     centroid_transformed(2));
-	    
-	    pcl::fromROSMsg(*scan_transformed, *cloud);
 	    Eigen::Vector4f centroid;
 	    float xpos = 0.0;
 	    float ypos = 0.0;
@@ -165,10 +123,22 @@ public:
 	    pcl::PassThrough<pcl::PointXYZ> pass;
 	    Eigen::VectorXf lims(6);
 
-	    // Transform cloud:
-	    // cloud_transformed->makeShared();
-	    // pcl::getTransformedPointCloud(
-	    // 	*cloud, const_transform, *cloud_transformed);
+	    sensor_msgs::PointCloud2::Ptr
+		robot_cloud (new sensor_msgs::PointCloud2 ()),
+		robot_cloud_filtered (new sensor_msgs::PointCloud2 ());    
+
+	    pcl::PointCloud<pcl::PointXYZ>::Ptr
+		cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
+		cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
+
+	    // New sensor message for holding the transformed data
+	    sensor_msgs::PointCloud2::Ptr scan_transformed (new sensor_msgs::PointCloud2());
+	    pcl_ros::transformPointCloud("/oriented_optimization_frame",
+	    				 tf, *scan, *scan_transformed);
+	    scan_transformed->header.frame_id = "/oriented_optimization_frame";
+
+	    // Convert to pcl
+	    pcl::fromROSMsg(*scan_transformed, *cloud);
 
 	    // set time stamp and frame id
 	    ros::Time tstamp = ros::Time::now();
@@ -178,7 +148,7 @@ public:
 	    // do we need to find the object?
 	    if (locate == true)
 	    {
-	    	//lims << -1.0, 1.0, -0.25, 0.1, 0.0, 4.0;
+	    	lims << -1.0, 1.0, -0.1, 0.1, 0.0, 4.0;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
@@ -216,22 +186,11 @@ public:
 	    // of the input cloud
 	    else
 	    {
-	    	lims << -1.0, 1.0, -0.25, 0.1, 0.0, 4.0;
-	    	pass_through(cloud, cloud_filtered, lims);
-		
-	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
-	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
-
-	    	// Publish cloud:
-	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud_filtered);
-	    	robot_cloud_filtered->header.frame_id = "/oriented_optimization_frame";
-	    	cloud_pub[1].publish(robot_cloud_filtered);
-		
 	    	lims <<
-	    	    xpos_last-2.0*R_search, xpos_last+2.0*R_search,
+	    	    xpos_last-R_search, xpos_last+R_search,
 	    	    ypos_last-R_search, ypos_last+R_search,
 	    	    zpos_last-R_search, zpos_last+R_search;
-	    	pass_through(cloud_transformed, cloud_filtered, lims);
+	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	// are there enough points in the point cloud?
 	    	if(cloud_filtered->points.size() < POINT_THRESHOLD)
@@ -264,7 +223,7 @@ public:
 	    	static tf::TransformBroadcaster br;
 	    	br.sendTransform(tf::StampedTransform
 	    			 (transform,ros::Time::now(),
-	    			  "openni_depth_optical_frame","robot_kinect_frame"));
+	    			  "/oriented_optimization_frame","/robot_kinect_frame"));
 
 	    	// set pointplus message values and publish
 	    	pointplus.x = xpos;
