@@ -1,0 +1,7 @@
+<launch>
+  <node pkg="objecttracker_nu" type="robot_tracker" name="robot_tracker_node" output="screen">
+  </node>
+  <node pkg="objecttracker_nu" type="object_tracker" name="object_tracker_node" output="screen">
+  </node>
+  <include file="$(find objecttracker_nu)/launch/optimization_frame_broadcaster.launch"/>
+</launch>

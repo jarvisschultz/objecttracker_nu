@@ -1,12 +1,12 @@
-// Jake Ware and Jarvis Schultz
+// Jarvis Schultz
 // September 13, 2011
 
 //---------------------------------------------------------------------------
 // Notes
 // ---------------------------------------------------------------------------
-// This node is for tracking a robot.  It should be launched from a
-// launch file that defines a coordinate transform from the kinect's
-// depth frame to a frame aligned with my optimization code.
+// This is a new node for tracking a suspended object.  It is very
+// similar to nu_objecttracker.cpp.  It should be launched with a
+// launch file just like in robot_tracker.cpp.  
 
 //---------------------------------------------------------------------------
 // Includes
@@ -66,25 +66,28 @@ private:
     ros::Subscriber cloud_sub;
     ros::Publisher cloud_pub[2];
     ros::Publisher pointplus_pub;
-    float xpos_last;
-    float ypos_last;
-    float zpos_last;
+    float xpos_last, xpos_lastlast;
+    float ypos_last, ypos_lastlast;
+    float zpos_last, zpos_lastlast;
     bool locate;
     puppeteer_msgs::speed_command srv;
     Eigen::Affine3f const_transform;
     tf::Transform tf;
+    ros::Time t_now_timer, t_last_timer;
+    float dt_timer;
 
 public:
     ObjectTracker()
 	{
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1, &ObjectTracker::cloudcb, this);
-	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("robot_position", 100);
-	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2> ("robot_cloud", 1);
-	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2> ("robot_filtered_cloud", 1);
+	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("object1_position", 100);
+	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2> ("object1_cloud", 1);
+	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2> ("object1_filtered_cloud", 1);
   
 	    xpos_last = 0.0;
 	    ypos_last = 0.0;
 	    zpos_last = 0.0;
+
 	    locate = true;
 	    tf::StampedTransform t;
 	    tf::TransformListener listener;
@@ -106,11 +109,15 @@ public:
 		ROS_ERROR("%s", ex.what());
 		ros::shutdown();
 	    }
+
+	    t_now_timer = ros::Time::now();
+	    dt_timer = 0.0;
 	}
 
     // this function gets called every time new pcl data comes in
     void cloudcb(const sensor_msgs::PointCloud2ConstPtr &scan)
 	{
+	    static unsigned int found_flag = 0;
 	    Eigen::Vector4f centroid;
 	    float xpos = 0.0;
 	    float ypos = 0.0;
@@ -147,7 +154,8 @@ public:
 	    // do we need to find the object?
 	    if (locate == true)
 	    {
-	    	lims << -1.0, 1.0, -0.1, 0.1, 0.0, 4.0;
+		found_flag = 0;
+	    	lims << -0.8, 0.8, -2.0, -0.25, 0.0, 3.75;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
@@ -161,6 +169,7 @@ public:
 	    	// are there enough points in the point cloud?
 	    	if(cloud_filtered->points.size() > POINT_THRESHOLD)
 	    	{
+		    found_flag++;
 	    	    locate = false;  // We have re-found the object!
 
 	    	    // set values to publish
@@ -185,11 +194,36 @@ public:
 	    // of the input cloud
 	    else
 	    {
-	    	lims <<
-	    	    xpos_last-R_search, xpos_last+R_search,
-	    	    ypos_last-R_search, ypos_last+R_search,
-	    	    zpos_last-R_search, zpos_last+R_search;
-	    	pass_through(cloud, cloud_filtered, lims);
+		if (found_flag == 1)
+		{
+		    lims <<
+			xpos_last-R_search, xpos_last+R_search,
+			ypos_last-R_search, ypos_last+R_search,
+			zpos_last-R_search, zpos_last+R_search;
+		    found_flag++;		       
+		}
+		else
+		{
+		    // calculate velocities:
+		    dt_timer = (t_now_timer.toSec()-t_last_timer.toSec());
+		    ROS_DEBUG("dt_timer: %f", dt_timer);
+
+		    float xdot = (xpos_last-xpos_lastlast)/dt_timer;
+		    float ydot = (ypos_last-ypos_lastlast)/dt_timer;
+		    float zdot = (zpos_last-zpos_lastlast)/dt_timer;
+		    float dt = ((ros::Time::now()).toSec()-t_now_timer.toSec());
+		    
+		    float xsearch = xpos_last + xdot*dt;
+		    float ysearch = ypos_last + ydot*dt;
+		    float zsearch = zpos_last + zdot*dt;
+
+		    lims <<
+			xsearch-R_search, xsearch+R_search,
+			ysearch-R_search, ysearch+R_search,
+			zsearch-R_search, zsearch+R_search;
+		}
+
+		pass_through(cloud, cloud_filtered, lims);
 		
 	    	// are there enough points in the point cloud?
 	    	if(cloud_filtered->points.size() < POINT_THRESHOLD)
@@ -222,7 +256,7 @@ public:
 	    	static tf::TransformBroadcaster br;
 	    	br.sendTransform(tf::StampedTransform
 	    			 (transform,ros::Time::now(),
-	    			  "/oriented_optimization_frame","/robot_kinect_frame"));
+	    			  "/oriented_optimization_frame","/object_kinect_frame"));
 
 	    	// set pointplus message values and publish
 	    	pointplus.x = xpos;
@@ -233,6 +267,11 @@ public:
 	    	pointplus_pub.publish(pointplus);
 	    }
 
+	    t_last_timer = t_now_timer;
+	    t_now_timer = ros::Time::now();
+	    xpos_lastlast = xpos_last;
+	    ypos_lastlast = ypos_last;
+	    zpos_lastlast = zpos_last;
 	    xpos_last = xpos;
 	    ypos_last = ypos;
 	    zpos_last = zpos;
@@ -280,10 +319,10 @@ public:
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "robot_tracker");
+  ros::init(argc, argv, "object_tracker");
   ros::NodeHandle n;
 
-  ROS_INFO("Starting Robot Tracker...\n");
+  ROS_INFO("Starting Object Tracker...\n");
   ObjectTracker tracker;
   
   ros::spin();

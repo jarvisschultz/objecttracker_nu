@@ -36,4 +36,5 @@ target_link_libraries (planar_segmentation ${PCL_LIBRARIES})
 
 rosbuild_add_executable(nu_objecttracker src/nu_objecttracker.cpp)
 rosbuild_add_executable(robot_tracker src/robot_tracker.cpp)
+rosbuild_add_executable(object_tracker src/object_tracker_3d.cpp)
 rosbuild_add_executable(system_calibrator src/orientation_calibration.cpp)
