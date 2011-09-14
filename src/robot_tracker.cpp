@@ -22,6 +22,8 @@
 #include <ros/ros.h>
 #include <Eigen/Dense>
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
+#include <tf/transform_datatypes.h>
 #include <puppeteer_msgs/PointPlus.h>
 #include <puppeteer_msgs/speed_command.h>
 #include <geometry_msgs/Point.h>
@@ -37,6 +39,10 @@
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/pcl_base.h>
+#include <pcl/common/transform.h>
+#include <pcl_ros/point_cloud.h>
+#include <pcl_ros/transforms.h>
 
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
@@ -66,6 +72,9 @@ private:
     float zpos_last;
     bool locate;
     puppeteer_msgs::speed_command srv;
+    Eigen::Affine3f const_transform;
+    tf::Transform tf;
+    tf::Transform tf2;
 
 public:
     ObjectTracker()
@@ -79,6 +88,38 @@ public:
 	    ypos_last = 0.0;
 	    zpos_last = 0.0;
 	    locate = true;
+	    tf::StampedTransform t;
+	    tf::TransformListener listener;
+
+	    try
+	    {
+		ros::Time now=ros::Time::now();
+		listener.waitForTransform("/openni_depth_optical_frame",
+					 "/oriented_optimization_frame",
+					  now, ros::Duration(5.0));
+		listener.lookupTransform("/openni_depth_optical_frame",
+					 "/oriented_optimization_frame",
+					 ros::Time(0), t);
+	    }
+	    catch (tf::TransformException ex)
+	    {
+		ROS_ERROR("%s", ex.what());
+		ros::shutdown();
+	    }
+	    ROS_INFO("Generating constant transform SE(3) Matrix");
+	    Eigen::Matrix4f tmp_transform;
+	    tf = t;	    
+	    pcl_ros::transformAsMatrix(tf, tmp_transform);
+	    const_transform.matrix() = tmp_transform;
+
+	    std::cout << const_transform.linear() << std::endl;
+	    std::cout << const_transform.translation() << std::endl;
+
+	    listener.lookupTransform("/oriented_optimization_frame",
+				     "/openni_depth_optical_frame",
+				     ros::Time(0), t);
+	    tf2 = t;
+	    
 	}
 
     // this function gets called every time new pcl data comes in
@@ -93,8 +134,26 @@ public:
 		cloud_transformed (new pcl::PointCloud<pcl::PointXYZ> ()),
 		cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
 
-	    // convert pcl2 message to pcl object
-	    pcl::fromROSMsg(*scan,*cloud);
+	    sensor_msgs::PointCloud2::Ptr scan_transformed (new sensor_msgs::PointCloud2());
+	    pcl_ros::transformPointCloud("/oriented_optimization_frame",
+	    				 tf2, *scan, *scan_transformed);
+	    scan_transformed->header.frame_id = "/oriented_optimization_frame";
+
+	    // cloud_pub[1].publish(scan_transformed);
+
+	    // pcl::fromROSMsg(*scan, *cloud);
+	    // pcl::fromROSMsg(*scan_transformed, *cloud_transformed);
+	    // Eigen::Vector4f centroid, centroid_transformed;
+	    // pcl::compute3DCentroid(*cloud, centroid);
+	    // pcl::compute3DCentroid(*cloud_transformed, centroid_transformed);
+
+	    // ROS_INFO("Original Cloud Centroid = %f %f %f",
+	    // 	     centroid(0), centroid(1), centroid(2));
+	    // ROS_INFO("Transfor Cloud Centroid = %f %f %f",
+	    // 	     centroid_transformed(0), centroid_transformed(1),
+	    // 	     centroid_transformed(2));
+	    
+	    pcl::fromROSMsg(*scan_transformed, *cloud);
 	    Eigen::Vector4f centroid;
 	    float xpos = 0.0;
 	    float ypos = 0.0;
@@ -105,97 +164,115 @@ public:
 	    geometry_msgs::Point point;
 	    pcl::PassThrough<pcl::PointXYZ> pass;
 	    Eigen::VectorXf lims(6);
-		
+
+	    // Transform cloud:
+	    // cloud_transformed->makeShared();
+	    // pcl::getTransformedPointCloud(
+	    // 	*cloud, const_transform, *cloud_transformed);
+
 	    // set time stamp and frame id
 	    ros::Time tstamp = ros::Time::now();
 	    pointplus.header.stamp = tstamp;
-	    pointplus.header.frame_id = "depth_optical_frame";
+	    pointplus.header.frame_id = "/oriented_optimization_frame";
 
 	    // do we need to find the object?
 	    if (locate == true)
 	    {
-		lims << -0.8, 0.8, -5.0, 0.5, 0.0, 3.25;
-		pass_through(cloud, cloud_filtered, lims);
+	    	//lims << -1.0, 1.0, -0.25, 0.1, 0.0, 4.0;
+	    	pass_through(cloud, cloud_filtered, lims);
 		
-		pcl::compute3DCentroid(*cloud_filtered, centroid);
-		xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
+	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
+	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
 
-		// Publish cloud:
-		pcl::toROSMsg(*cloud_filtered, *robot_cloud_filtered);
-		cloud_pub[1].publish(robot_cloud_filtered);
+	    	// Publish cloud:
+	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud_filtered);
+	    	robot_cloud_filtered->header.frame_id = "/oriented_optimization_frame";
+	    	cloud_pub[1].publish(robot_cloud_filtered);
 		
-		// are there enough points in the point cloud?
-		if(cloud_filtered->points.size() > POINT_THRESHOLD)
-		{
-		    locate = false;  // We have re-found the object!
+	    	// are there enough points in the point cloud?
+	    	if(cloud_filtered->points.size() > POINT_THRESHOLD)
+	    	{
+	    	    locate = false;  // We have re-found the object!
 
-		    // set values to publish
-		    pointplus.x = xpos; pointplus.y = ypos; pointplus.z = zpos;
-		    pointplus.error = false;
-		    pointplus_pub.publish(pointplus);
-		}
-		// otherwise we should publish a blank centroid
-		// position with an error flag
-		else
-		{
-		    // set values to publish
-		    pointplus.x = 0.0;
-		    pointplus.y = 0.0;
-		    pointplus.z = 0.0;
-		    pointplus.error = true;
+	    	    // set values to publish
+	    	    pointplus.x = xpos; pointplus.y = ypos; pointplus.z = zpos;
+	    	    pointplus.error = false;
+	    	    pointplus_pub.publish(pointplus);
+	    	}
+	    	// otherwise we should publish a blank centroid
+	    	// position with an error flag
+	    	else
+	    	{
+	    	    // set values to publish
+	    	    pointplus.x = 0.0;
+	    	    pointplus.y = 0.0;
+	    	    pointplus.z = 0.0;
+	    	    pointplus.error = true;
 
-		    pointplus_pub.publish(pointplus);	    
-		}
+	    	    pointplus_pub.publish(pointplus);	    
+	    	}
 	    }
 	    // if "else", we are just going to calculate the centroid
 	    // of the input cloud
 	    else
 	    {
-		lims <<
-		    xpos_last-2.0*R_search, xpos_last+2.0*R_search,
-		    ypos_last-R_search, ypos_last+R_search,
-		    zpos_last-R_search, zpos_last+R_search;
-		pass_through(cloud, cloud_filtered, lims);
+	    	lims << -1.0, 1.0, -0.25, 0.1, 0.0, 4.0;
+	    	pass_through(cloud, cloud_filtered, lims);
 		
-		// are there enough points in the point cloud?
-		if(cloud_filtered->points.size() < POINT_THRESHOLD)
-		{
-		    locate = true;
-		    ROS_WARN("Lost Object at: x = %f  y = %f  z = %f\n",
-			     xpos_last,ypos_last,zpos_last);
+	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
+	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
+
+	    	// Publish cloud:
+	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud_filtered);
+	    	robot_cloud_filtered->header.frame_id = "/oriented_optimization_frame";
+	    	cloud_pub[1].publish(robot_cloud_filtered);
+		
+	    	lims <<
+	    	    xpos_last-2.0*R_search, xpos_last+2.0*R_search,
+	    	    ypos_last-R_search, ypos_last+R_search,
+	    	    zpos_last-R_search, zpos_last+R_search;
+	    	pass_through(cloud_transformed, cloud_filtered, lims);
+		
+	    	// are there enough points in the point cloud?
+	    	if(cloud_filtered->points.size() < POINT_THRESHOLD)
+	    	{
+	    	    locate = true;
+	    	    ROS_WARN("Lost Object at: x = %f  y = %f  z = %f\n",
+	    		     xpos_last,ypos_last,zpos_last);
 	  
-		    pointplus.x = 0.0;
-		    pointplus.y = 0.0;
-		    pointplus.z = 0.0;
-		    pointplus.error = true;
+	    	    pointplus.x = 0.0;
+	    	    pointplus.y = 0.0;
+	    	    pointplus.z = 0.0;
+	    	    pointplus.error = true;
 
-		    pointplus_pub.publish(pointplus);
+	    	    pointplus_pub.publish(pointplus);
 		    	  	  
-		    return;
-		}
+	    	    return;
+	    	}
 	
-		pcl::compute3DCentroid(*cloud_filtered, centroid);
-		xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
+	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
+	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
 
-		pcl::toROSMsg(*cloud_filtered, *robot_cloud);
-		cloud_pub[0].publish(robot_cloud);
+	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud);
+	    	robot_cloud_filtered->header.frame_id = "/oriented_optimization_frame";
+	    	cloud_pub[0].publish(robot_cloud);
 
-		tf::Transform transform;
-		transform.setOrigin(tf::Vector3(xpos, ypos, zpos));
-		transform.setRotation(tf::Quaternion(0, 0, 0, 1));
+	    	tf::Transform transform;
+	    	transform.setOrigin(tf::Vector3(xpos, ypos, zpos));
+	    	transform.setRotation(tf::Quaternion(0, 0, 0, 1));
 
-		static tf::TransformBroadcaster br;
-		br.sendTransform(tf::StampedTransform
-				 (transform,ros::Time::now(),
-				  "openni_rgb_optical_frame","robot_kinect_frame"));
+	    	static tf::TransformBroadcaster br;
+	    	br.sendTransform(tf::StampedTransform
+	    			 (transform,ros::Time::now(),
+	    			  "openni_depth_optical_frame","robot_kinect_frame"));
 
-		// set pointplus message values and publish
-		pointplus.x = xpos;
-		pointplus.y = ypos;
-		pointplus.z = zpos;
-		pointplus.error = false;
+	    	// set pointplus message values and publish
+	    	pointplus.x = xpos;
+	    	pointplus.y = ypos;
+	    	pointplus.z = zpos;
+	    	pointplus.error = false;
 
-		pointplus_pub.publish(pointplus);
+	    	pointplus_pub.publish(pointplus);
 	    }
 
 	    xpos_last = xpos;
