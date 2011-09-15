@@ -78,7 +78,7 @@ public:
     ObjectTracker()
 	{
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1, &ObjectTracker::cloudcb, this);
-	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("robot_position", 100);
+	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("robot_kinect_position", 100);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2> ("robot_cloud", 1);
 	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2> ("robot_filtered_cloud", 1);
   
@@ -147,7 +147,7 @@ public:
 	    // do we need to find the object?
 	    if (locate == true)
 	    {
-	    	lims << -1.0, 1.0, -0.1, 0.1, 0.0, 4.0;
+	    	lims << -1.0, 1.0, -0.1, 1.0, 0.0, 4.0;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
