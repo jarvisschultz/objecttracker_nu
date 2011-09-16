@@ -93,7 +93,7 @@ public:
 	    {
 		ros::Time now=ros::Time::now();
 		listener.waitForTransform("/openni_depth_optical_frame",
-					 "/oriented_optimization_frame",
+					  "/oriented_optimization_frame",
 					  now, ros::Duration(1.0));
 		listener.lookupTransform("/oriented_optimization_frame",
 					 "/openni_depth_optical_frame",
@@ -132,9 +132,16 @@ public:
 
 	    // New sensor message for holding the transformed data
 	    sensor_msgs::PointCloud2::Ptr scan_transformed (new sensor_msgs::PointCloud2());
-	    pcl_ros::transformPointCloud("/oriented_optimization_frame",
-	    				 tf, *scan, *scan_transformed);
+	    try{
+		pcl_ros::transformPointCloud("/oriented_optimization_frame",
+					     tf, *scan, *scan_transformed);
+	    }
+	    catch(tf::TransformException ex)
+	    {
+		ROS_ERROR("%s", ex.what());
+	    }
 	    scan_transformed->header.frame_id = "/oriented_optimization_frame";
+
 
 	    // Convert to pcl
 	    pcl::fromROSMsg(*scan_transformed, *cloud);
