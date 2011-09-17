@@ -139,8 +139,14 @@ public:
 
 	    // New sensor message for holding the transformed data
 	    sensor_msgs::PointCloud2::Ptr scan_transformed (new sensor_msgs::PointCloud2());
-	    pcl_ros::transformPointCloud("/oriented_optimization_frame",
-	    				 tf, *scan, *scan_transformed);
+	    try{
+		pcl_ros::transformPointCloud("/oriented_optimization_frame",
+					     tf, *scan, *scan_transformed);
+	    }
+	    catch(tf::TransformException ex)
+	    {
+		ROS_ERROR("%s", ex.what());
+	    }
 	    scan_transformed->header.frame_id = "/oriented_optimization_frame";
 
 	    // Convert to pcl
@@ -155,7 +161,7 @@ public:
 	    if (locate == true)
 	    {
 		found_flag = 0;
-	    	lims << -0.8, 0.8, -2.0, -0.25, 0.0, 3.75;
+	    	lims << -1.0, 1.0, -2.1, -0.30, 0.0, 4.0;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);

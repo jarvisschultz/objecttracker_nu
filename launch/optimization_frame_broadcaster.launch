@@ -1,4 +1,4 @@
 <launch>
 	<node pkg="tf" type="static_transform_publisher" name="optimization_frame_broadcaster"
-args="0 0 0 -0.000217042 -0.0401452 0.999194 -8.72022e-06 openni_depth_optical_frame oriented_optimization_frame 100" />
+args="0 0 0 -0.0142398 -0.162034 0.98668 -0.00233849 openni_depth_optical_frame oriented_optimization_frame 100" />
 </launch>
