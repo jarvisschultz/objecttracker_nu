@@ -154,7 +154,7 @@ public:
 	    // do we need to find the object?
 	    if (locate == true)
 	    {
-	    	lims << -1.0, 1.0, -0.1, 1.0, 0.0, 4.0;
+	    	lims << -1.0, 1.0, -0.1, 1.0, 0.0, 3.5;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
