@@ -161,7 +161,7 @@ public:
 	    if (locate == true)
 	    {
 		found_flag = 0;
-	    	lims << -1.0, 1.0, -2.1, -0.30, 0.0, 4.0;
+	    	lims << -1.0, 1.0, -1.8, -0.30, 0.0, 2.45;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);

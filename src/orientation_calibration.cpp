@@ -167,13 +167,15 @@ public:
 	    float avgcounts[3] = {0.0,0.0,0.0};
 	    for(int i=0; i < (int) mls_normals->points.size(); i++)
 	    {
-		for(int j=0; j<3; j++)
-		    if(!std::isnan(mls_normals->points.at(i).normal[j]))
-		    {
-			avgnormal[j] += mls_normals->points.at(i).normal[j];
-			avgcounts[j] += 1.0;
-		    }
+		if (mls_normals->points.at(i).normal[2] > 0)
+		    for(int j=0; j<3; j++)
+			if(!std::isnan(mls_normals->points.at(i).normal[j]))
+			{
+			    avgnormal[j] += mls_normals->points.at(i).normal[j];
+			    avgcounts[j] += 1.0;
+			}
 	    }
+
 	    for(int j=0; j<3; j++)
 		avgnormal[j] /= avgcounts[j];
 	    call_count++;
@@ -410,7 +412,7 @@ public:
 	    else
 		// Normal is towards kinect
 		zvec = -normal;
-	    xvec << 1.0,0.0,0.0;
+	    xvec << -1.0,0.0,0.0;
 	    yvec << zvec.cross(xvec);
 
 	    // current vectors are aligned with gravity, but let's now
