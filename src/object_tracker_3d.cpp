@@ -79,10 +79,14 @@ private:
 public:
     ObjectTracker()
 	{
-	    cloud_sub = n_.subscribe("/camera/depth/points", 1, &ObjectTracker::cloudcb, this);
-	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("object1_position", 100);
-	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2> ("object1_cloud", 1);
-	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2> ("object1_filtered_cloud", 1);
+	    cloud_sub = n_.subscribe("/camera/depth/points", 1,
+				     &ObjectTracker::cloudcb, this);
+	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus>
+		("object1_position", 100);
+	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2>
+		("object1_cloud", 1);
+	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2>
+		("object1_filtered_cloud", 1);
   
 	    xpos_last = 0.0;
 	    ypos_last = 0.0;
@@ -137,8 +141,12 @@ public:
 		cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
 		cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
 
+	    // set a parameter telling the world that I am tracking the mass
+	    ros::param::set("/tracking_mass", true);
+
 	    // New sensor message for holding the transformed data
-	    sensor_msgs::PointCloud2::Ptr scan_transformed (new sensor_msgs::PointCloud2());
+	    sensor_msgs::PointCloud2::Ptr scan_transformed
+		(new sensor_msgs::PointCloud2());
 	    try{
 		pcl_ros::transformPointCloud("/oriented_optimization_frame",
 					     tf, *scan, *scan_transformed);
@@ -161,7 +169,7 @@ public:
 	    if (locate == true)
 	    {
 		found_flag = 0;
-	    	lims << -1.0, 1.0, -1.8, -0.30, 0.0, 2.45;
+	    	lims << -1.0, 1.0, -1.6, -0.30, 0.0, 2.45;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
@@ -169,7 +177,8 @@ public:
 
 	    	// Publish cloud:
 	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud_filtered);
-	    	robot_cloud_filtered->header.frame_id = "/oriented_optimization_frame";
+	    	robot_cloud_filtered->header.frame_id =
+		    "/oriented_optimization_frame";
 	    	cloud_pub[1].publish(robot_cloud_filtered);
 		
 	    	// are there enough points in the point cloud?
@@ -252,7 +261,8 @@ public:
 	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
 
 	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud);
-	    	robot_cloud_filtered->header.frame_id = "/oriented_optimization_frame";
+	    	robot_cloud_filtered->header.frame_id =
+		    "/oriented_optimization_frame";
 	    	cloud_pub[0].publish(robot_cloud);
 
 	    	tf::Transform transform;
@@ -262,7 +272,8 @@ public:
 	    	static tf::TransformBroadcaster br;
 	    	br.sendTransform(tf::StampedTransform
 	    			 (transform,ros::Time::now(),
-	    			  "/oriented_optimization_frame","/object_kinect_frame"));
+	    			  "/oriented_optimization_frame",
+				  "/object_kinect_frame"));
 
 	    	// set pointplus message values and publish
 	    	pointplus.x = xpos;
@@ -294,7 +305,7 @@ public:
 
 	    if(lims.size() != 6)
 	    {
-		ROS_WARN("Limits for transformations not of correct dimension!");
+		ROS_WARN("Limits for pass-through wrong size!");
 		return;
 	    }
 
