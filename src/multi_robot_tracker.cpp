@@ -24,7 +24,7 @@
 #include <tf/transform_listener.h>
 #include <tf/transform_datatypes.h>
 #include <puppeteer_msgs/PointPlus.h>
-#include <puppeteer_msgs/speed_command.h>
+#include <puppeteer_msgs/Robots.h>
 #include <geometry_msgs/Point.h>
 
 #include <pcl/io/pcd_io.h>
@@ -42,6 +42,8 @@
 #include <pcl/common/transform.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl_ros/transforms.h>
+#include <pcl/kdtree/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
@@ -51,6 +53,7 @@
 // Global Variables
 //---------------------------------------------------------------------------
 #define POINT_THRESHOLD (5)
+#define MAX_CLUSTERS 5
 typedef pcl::PointXYZ PointT;
 
 
@@ -64,35 +67,36 @@ class RobotTracker
 private:
     ros::NodeHandle n_;
     ros::Subscriber cloud_sub;
-    ros::Publisher cloud_pub[2];
-    ros::Publisher pointplus_pub;
-    float xpos_last;
-    float ypos_last;
-    float zpos_last;
+    ros::Publisher cloud_pub[MAX_CLUSTERS];
+    ros::Publisher robots_pub;
     bool locate;
-    puppeteer_msgs::speed_command srv;
     Eigen::Affine3f const_transform;
     tf::Transform tf;
 
 public:
     RobotTracker()
 	{
+	    ROS_DEBUG("Creating subscribers and publishers");
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1,
 				     &RobotTracker::cloudcb, this);
-	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus>
-		("robot_kinect_position", 100);
+	    robots_pub = n_.advertise<puppeteer_msgs::Robots>
+		("robot_positions", 100);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2>
-		("robot_cloud", 1);
+		("filtered_cloud", 1);
 	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2>
-		("robot_filtered_cloud", 1);
+		("cluster_1_cloud", 1);
+	    cloud_pub[2] = n_.advertise<sensor_msgs::PointCloud2>
+		("cluster_2_cloud", 1);
+	    cloud_pub[3] = n_.advertise<sensor_msgs::PointCloud2>
+		("cluster_3_cloud", 1);
+	    cloud_pub[4] = n_.advertise<sensor_msgs::PointCloud2>
+		("cluster_4_cloud", 1);
   
-	    xpos_last = 0.0;
-	    ypos_last = 0.0;
-	    zpos_last = 0.0;
 	    locate = true;
 	    tf::StampedTransform t;
 	    tf::TransformListener listener;
 
+	    ROS_DEBUG("Looking up transform from kinect to optimization frame");
 	    try
 	    {
 		ros::Time now=ros::Time::now();
@@ -115,20 +119,17 @@ public:
     // this function gets called every time new pcl data comes in
     void cloudcb(const sensor_msgs::PointCloud2ConstPtr &scan)
 	{
-	    Eigen::Vector4f centroid;
-	    float xpos = 0.0;
-	    float ypos = 0.0;
-	    float zpos = 0.0;
-	    float D_sphere = 0.05; //meters
-	    float R_search = 2.0*D_sphere;
-	    puppeteer_msgs::PointPlus pointplus;
+	    ROS_DEBUG("cloudcb started");
+	    ros::Time time = ros::Time::now();
+	    // Eigen::Vector4f centroid;
+	    // float D_sphere = 0.05; //meters
+	    // float R_search = 2.0*D_sphere;
 	    geometry_msgs::Point point;
 	    pcl::PassThrough<pcl::PointXYZ> pass;
 	    Eigen::VectorXf lims(6);
-
 	    sensor_msgs::PointCloud2::Ptr
-		robot_cloud (new sensor_msgs::PointCloud2 ()),
-		robot_cloud_filtered (new sensor_msgs::PointCloud2 ());    
+		ros_cloud (new sensor_msgs::PointCloud2 ()),
+		ros_cloud_filtered (new sensor_msgs::PointCloud2 ());    
 
 	    pcl::PointCloud<pcl::PointXYZ>::Ptr
 		cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
@@ -137,6 +138,7 @@ public:
 	    // set a parameter telling the world that I am tracking the robot
 	    ros::param::set("/tracking_robot", true);
 
+	    ROS_DEBUG("About to transform cloud");
 	    // New sensor message for holding the transformed data
 	    sensor_msgs::PointCloud2::Ptr scan_transformed
 		(new sensor_msgs::PointCloud2());
@@ -144,116 +146,92 @@ public:
 		pcl_ros::transformPointCloud("/oriented_optimization_frame",
 					     tf, *scan, *scan_transformed);
 	    }
-	    catch(tf::TransformException ex)
-	    {
+	    catch(tf::TransformException ex) {
 		ROS_ERROR("%s", ex.what());
 	    }
 	    scan_transformed->header.frame_id = "/oriented_optimization_frame";
 
-
 	    // Convert to pcl
+	    ROS_DEBUG("Convert cloud to pcd from rosmsg");
 	    pcl::fromROSMsg(*scan_transformed, *cloud);
 
 	    // set time stamp and frame id
 	    ros::Time tstamp = ros::Time::now();
-	    pointplus.header.stamp = tstamp;
-	    pointplus.header.frame_id = "/oriented_optimization_frame";
 
-	    // do we need to find the object?
-	    if (locate == true)
-	    {
-	    	lims << -1.0, 1.0, -0.1, 1.0, 0.0, 3.5;
-	    	pass_through(cloud, cloud_filtered, lims);
-		
-	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
-	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
+	    // run through pass-through filter to eliminate tarp and below robots.
+	    ROS_DEBUG("Pass-through filter");
+	    lims << -1.0, 1.0, -0.1, 1.0, 0.0, 3.5;
+	    pass_through(cloud, cloud_filtered, lims);
 
-	    	// Publish cloud:
-	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud_filtered);
-	    	robot_cloud_filtered->header.frame_id =
-		    "/oriented_optimization_frame";
-	    	cloud_pub[1].publish(robot_cloud_filtered);
-		
-	    	// are there enough points in the point cloud?
-	    	if(cloud_filtered->points.size() > POINT_THRESHOLD)
-	    	{
-	    	    locate = false;  // We have re-found the object!
+	    // now let's publish that filtered cloud
+	    ROS_DEBUG("Converting and publishing cloud");		      
+	    pcl::toROSMsg(*cloud_filtered, *ros_cloud_filtered);
+	    ros_cloud_filtered->header.frame_id =
+		"/oriented_optimization_frame";
+	    cloud_pub[0].publish(ros_cloud_filtered);
 
-	    	    // set values to publish
-	    	    pointplus.x = xpos; pointplus.y = ypos; pointplus.z = zpos;
-	    	    pointplus.error = false;
-	    	    pointplus_pub.publish(pointplus);
-	    	}
-	    	// otherwise we should publish a blank centroid
-	    	// position with an error flag
-	    	else
-	    	{
-	    	    // set values to publish
-	    	    pointplus.x = 0.0;
-	    	    pointplus.y = 0.0;
-	    	    pointplus.z = 0.0;
-	    	    pointplus.error = true;
+	    std::cout << "Original size = " << cloud->points.size() << std::endl;
+	    std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
+	    
+	    // ROS_DEBUG("Begin extraction filtering");
+	    // // build a KdTree object for the search method of the extraction
+	    // pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr tree
+	    // 	(new pcl::KdTreeFLANN<pcl::PointXYZ> ());
+	    // tree->setInputCloud (cloud_filtered);
 
-	    	    pointplus_pub.publish(pointplus);	    
-	    	}
-	    }
-	    // if "else", we are just going to calculate the centroid
-	    // of the input cloud
-	    else
-	    {
-	    	lims <<
-	    	    xpos_last-R_search, xpos_last+R_search,
-	    	    ypos_last-R_search, ypos_last+R_search,
-	    	    zpos_last-R_search, zpos_last+R_search;
-	    	pass_through(cloud, cloud_filtered, lims);
-		
-	    	// are there enough points in the point cloud?
-	    	if(cloud_filtered->points.size() < POINT_THRESHOLD)
-	    	{
-	    	    locate = true;
-	    	    ROS_WARN("Lost Object at: x = %f  y = %f  z = %f\n",
-	    		     xpos_last,ypos_last,zpos_last);
-	  
-	    	    pointplus.x = 0.0;
-	    	    pointplus.y = 0.0;
-	    	    pointplus.z = 0.0;
-	    	    pointplus.error = true;
+	    // // create a vector for storing the indices of the clusters
+	    // std::vector<pcl::PointIndices> cluster_indices;
 
-	    	    pointplus_pub.publish(pointplus);
-		    	  	  
-	    	    return;
-	    	}
-	
-	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
-	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
+	    // // setup extraction:
+	    // pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+	    // ec.setClusterTolerance (0.02); // 2cm
+	    // ec.setMinClusterSize (30);
+	    // ec.setMaxClusterSize (1000);
+	    // ec.setSearchMethod (tree);
+	    // ec.setInputCloud (cloud_filtered);
 
-	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud);
-	    	robot_cloud_filtered->header.frame_id =
-		    "/oriented_optimization_frame";
-	    	cloud_pub[0].publish(robot_cloud);
+	    // // now we can perform cluster extraction
+	    // ec.extract (cluster_indices);
 
-	    	tf::Transform transform;
-	    	transform.setOrigin(tf::Vector3(xpos, ypos, zpos));
-	    	transform.setRotation(tf::Quaternion(0, 0, 0, 1));
+	    // // run through the indices, create new clouds, and then publish them
+	    // int j=1;
+	    // for (std::vector<pcl::PointIndices>::const_iterator
+	    // 	     it=cluster_indices.begin();
+	    // 	 it!=cluster_indices.end (); ++it)
+	    // {
+	    // 	ROS_DEBUG_THROTTLE(1,"Number of clusters found: %d",
+	    // 			   (int) cluster_indices.size());
+	    // 	pcl::PointCloud<pcl::PointXYZ>::Ptr
+	    // 	    cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+	    // 	for (std::vector<int>::const_iterator
+	    // 		 pit = it->indices.begin ();
+	    // 	     pit != it->indices.end (); pit++)
+	    // 	{
+	    // 	    cloud_cluster->points.push_back(cloud_filtered->points[*pit]);
+	    // 	}
+	    // 	cloud_cluster->width = cloud_cluster->points.size ();
+	    // 	cloud_cluster->height = 1;
+	    // 	cloud_cluster->is_dense = true;
 
-	    	static tf::TransformBroadcaster br;
-	    	br.sendTransform(tf::StampedTransform
-	    			 (transform,ros::Time::now(),
-	    			  "/oriented_optimization_frame",
-				  "/robot_kinect_frame"));
+	    // 	// convert to rosmsg and publish:
+	    // 	ROS_DEBUG("Publishing extracted cloud");
+	    // 	pcl::toROSMsg(*cloud_filtered, *ros_cloud_filtered);
+	    // 	if(j<MAX_CLUSTERS)
+	    // 	    cloud_pub[j].publish(ros_cloud_filtered);
+	    // 	else
+	    // 	    ROS_DEBUG("Too many clusters found, on number %d",j);
+	    // 	j++;
+	    // }
+	    
+	    // pcl::compute3DCentroid(*cloud_filtered, centroid);
+	    // xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
 
-	    	// set pointplus message values and publish
-	    	pointplus.x = xpos;
-	    	pointplus.y = ypos;
-	    	pointplus.z = zpos;
-	    	pointplus.error = false;
-
-	    	pointplus_pub.publish(pointplus);
-	    }
-
-	    xpos_last = xpos;
-	    ypos_last = ypos;
-	    zpos_last = zpos;
+	    // pcl::toROSMsg(*cloud_filtered, *robot_cloud);
+	    // robot_cloud_filtered->header.frame_id =
+	    // 	"/oriented_optimization_frame";
+	    // cloud_pub[0].publish(robot_cloud);
+	    ros::Duration d = ros::Time::now()-time;
+	    ROS_DEBUG("End of cloudcb; time elapsed = %f", d.toSec());
 	}
 
     void pass_through(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
@@ -298,13 +276,20 @@ public:
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "robot_tracker");
-  ros::NodeHandle n;
+    ros::init(argc, argv, "robot_tracker");
 
-  ROS_INFO("Starting Robot Tracker...\n");
-  RobotTracker tracker;
+    // turn on debugging
+    log4cxx::LoggerPtr my_logger =
+    log4cxx::Logger::getLogger(ROSCONSOLE_DEFAULT_NAME);
+    my_logger->setLevel(
+    ros::console::g_level_lookup[ros::console::levels::Debug]);
+
+    ros::NodeHandle n;
+
+    ROS_INFO("Starting Robot Tracker...\n");
+    RobotTracker tracker;
   
-  ros::spin();
+    ros::spin();
   
-  return 0;
+    return 0;
 }
