@@ -170,8 +170,19 @@ public:
 		"/oriented_optimization_frame";
 	    cloud_pub[0].publish(ros_cloud_filtered);
 
-	    std::cout << "Original size = " << cloud->points.size() << std::endl;
-	    std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
+	    // create a pcd file:
+	    pcl::PCDWriter writer;
+	    std::stringstream ss;
+	    ss << "cloud_filtered.pcd";
+	    static bool create = true;
+	    if (create)
+	    {
+		create = false;
+		writer.write<pcl::PointXYZ> (ss.str (), *cloud_filtered, false); //*
+	    }
+	    
+	    // std::cout << "Original size = " << cloud->points.size() << std::endl;
+	    // std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
 	    
 	    // ROS_DEBUG("Begin extraction filtering");
 	    // // build a KdTree object for the search method of the extraction
