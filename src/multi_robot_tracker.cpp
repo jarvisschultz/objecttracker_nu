@@ -53,7 +53,7 @@
 // Global Variables
 //---------------------------------------------------------------------------
 #define POINT_THRESHOLD (5)
-#define MAX_CLUSTERS 5
+#define MAX_CLUSTERS 6
 typedef pcl::PointXYZ PointT;
 
 
@@ -91,7 +91,8 @@ public:
 		("cluster_3_cloud", 1);
 	    cloud_pub[4] = n_.advertise<sensor_msgs::PointCloud2>
 		("cluster_4_cloud", 1);
-  
+	    cloud_pub[5] = n_.advertise<sensor_msgs::PointCloud2>
+		("downsampled_cloud", 1);  
 	    locate = true;
 	    tf::StampedTransform t;
 	    tf::TransformListener listener;
@@ -133,7 +134,10 @@ public:
 
 	    pcl::PointCloud<pcl::PointXYZ>::Ptr
 		cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
+		cloud_downsampled (new pcl::PointCloud<pcl::PointXYZ> ()),
 		cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
+	    	    
+		    
 
 	    // set a parameter telling the world that I am tracking the robot
 	    ros::param::set("/tracking_robot", true);
@@ -170,69 +174,71 @@ public:
 		"/oriented_optimization_frame";
 	    cloud_pub[0].publish(ros_cloud_filtered);
 
-	    // create a pcd file:
-	    pcl::PCDWriter writer;
-	    std::stringstream ss;
-	    ss << "cloud_filtered.pcd";
-	    static bool create = true;
-	    if (create)
+	    // Let's do a downsampling before doing cluster extraction
+	    pcl::VoxelGrid<pcl::PointXYZ> vg;
+	    vg.setInputCloud (cloud_filtered);
+	    vg.setLeafSize (0.01f, 0.01f, 0.01f);
+	    vg.filter (*cloud_downsampled);
+	    pcl::toROSMsg(*cloud_downsampled, *ros_cloud_filtered);
+	    ros_cloud_filtered->header.frame_id =
+		"/oriented_optimization_frame";
+	    cloud_pub[5].publish(ros_cloud_filtered);	    
+
+	    std::cout << "Original size = " << cloud->points.size() << std::endl;
+	    std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
+	    std::cout << "Downsampled size = " << cloud_downsampled->points.size() << std::endl;
+	    
+	    ROS_DEBUG("Begin extraction filtering");
+	    // build a KdTree object for the search method of the extraction
+	    pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr tree
+	    	(new pcl::KdTreeFLANN<pcl::PointXYZ> ());
+	    tree->setInputCloud (cloud_downsampled);
+
+	    // create a vector for storing the indices of the clusters
+	    std::vector<pcl::PointIndices> cluster_indices;
+
+	    // setup extraction:
+	    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+	    ec.setClusterTolerance (0.02); // 2cm
+	    ec.setMinClusterSize (50);
+	    ec.setMaxClusterSize (1200);
+	    ec.setSearchMethod (tree);
+	    ec.setInputCloud (cloud_downsampled);
+
+	    // now we can perform cluster extraction
+	    ec.extract (cluster_indices);
+
+	    // run through the indices, create new clouds, and then publish them
+	    int j=1;
+	    for (std::vector<pcl::PointIndices>::const_iterator
+	    	     it=cluster_indices.begin();
+	    	 it!=cluster_indices.end (); ++it)
 	    {
-		create = false;
-		writer.write<pcl::PointXYZ> (ss.str (), *cloud_filtered, false); //*
+	    	ROS_DEBUG("Number of clusters found: %d",
+	    			   (int) cluster_indices.size());
+	    	pcl::PointCloud<pcl::PointXYZ>::Ptr
+	    	    cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+	    	for (std::vector<int>::const_iterator
+	    		 pit = it->indices.begin ();
+	    	     pit != it->indices.end (); pit++)
+	    	{
+	    	    cloud_cluster->points.push_back(cloud_downsampled->points[*pit]);
+	    	}
+	    	cloud_cluster->width = cloud_cluster->points.size ();
+	    	cloud_cluster->height = 1;
+	    	cloud_cluster->is_dense = true;
+
+	    	// convert to rosmsg and publish:
+	    	ROS_DEBUG("Publishing extracted cloud");
+	    	pcl::toROSMsg(*cloud_cluster, *ros_cloud_filtered);
+		ros_cloud_filtered->header.frame_id =
+		    "/oriented_optimization_frame";
+	    	if(j<MAX_CLUSTERS)
+	    	    cloud_pub[j].publish(ros_cloud_filtered);
+	    	else
+	    	    ROS_DEBUG("Too many clusters found, on number %d",j);
+	    	j++;
 	    }
-	    
-	    // std::cout << "Original size = " << cloud->points.size() << std::endl;
-	    // std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
-	    
-	    // ROS_DEBUG("Begin extraction filtering");
-	    // // build a KdTree object for the search method of the extraction
-	    // pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr tree
-	    // 	(new pcl::KdTreeFLANN<pcl::PointXYZ> ());
-	    // tree->setInputCloud (cloud_filtered);
-
-	    // // create a vector for storing the indices of the clusters
-	    // std::vector<pcl::PointIndices> cluster_indices;
-
-	    // // setup extraction:
-	    // pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-	    // ec.setClusterTolerance (0.02); // 2cm
-	    // ec.setMinClusterSize (30);
-	    // ec.setMaxClusterSize (1000);
-	    // ec.setSearchMethod (tree);
-	    // ec.setInputCloud (cloud_filtered);
-
-	    // // now we can perform cluster extraction
-	    // ec.extract (cluster_indices);
-
-	    // // run through the indices, create new clouds, and then publish them
-	    // int j=1;
-	    // for (std::vector<pcl::PointIndices>::const_iterator
-	    // 	     it=cluster_indices.begin();
-	    // 	 it!=cluster_indices.end (); ++it)
-	    // {
-	    // 	ROS_DEBUG_THROTTLE(1,"Number of clusters found: %d",
-	    // 			   (int) cluster_indices.size());
-	    // 	pcl::PointCloud<pcl::PointXYZ>::Ptr
-	    // 	    cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
-	    // 	for (std::vector<int>::const_iterator
-	    // 		 pit = it->indices.begin ();
-	    // 	     pit != it->indices.end (); pit++)
-	    // 	{
-	    // 	    cloud_cluster->points.push_back(cloud_filtered->points[*pit]);
-	    // 	}
-	    // 	cloud_cluster->width = cloud_cluster->points.size ();
-	    // 	cloud_cluster->height = 1;
-	    // 	cloud_cluster->is_dense = true;
-
-	    // 	// convert to rosmsg and publish:
-	    // 	ROS_DEBUG("Publishing extracted cloud");
-	    // 	pcl::toROSMsg(*cloud_filtered, *ros_cloud_filtered);
-	    // 	if(j<MAX_CLUSTERS)
-	    // 	    cloud_pub[j].publish(ros_cloud_filtered);
-	    // 	else
-	    // 	    ROS_DEBUG("Too many clusters found, on number %d",j);
-	    // 	j++;
-	    // }
 	    
 	    // pcl::compute3DCentroid(*cloud_filtered, centroid);
 	    // xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
@@ -241,6 +247,7 @@ public:
 	    // robot_cloud_filtered->header.frame_id =
 	    // 	"/oriented_optimization_frame";
 	    // cloud_pub[0].publish(robot_cloud);
+
 	    ros::Duration d = ros::Time::now()-time;
 	    ROS_DEBUG("End of cloudcb; time elapsed = %f", d.toSec());
 	}
