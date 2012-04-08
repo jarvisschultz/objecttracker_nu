@@ -199,9 +199,9 @@ public:
 
 	    // setup extraction:
 	    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-	    ec.setClusterTolerance (0.02); // 2cm
+	    ec.setClusterTolerance (0.05); // cm
 	    ec.setMinClusterSize (50);
-	    ec.setMaxClusterSize (1200);
+	    ec.setMaxClusterSize (1000);
 	    ec.setSearchMethod (tree);
 	    ec.setInputCloud (cloud_downsampled);
 
@@ -233,10 +233,10 @@ public:
 	    	pcl::toROSMsg(*cloud_cluster, *ros_cloud_filtered);
 		ros_cloud_filtered->header.frame_id =
 		    "/oriented_optimization_frame";
-	    	if(j<MAX_CLUSTERS)
+	    	if(j<MAX_CLUSTERS-1)
 	    	    cloud_pub[j].publish(ros_cloud_filtered);
 	    	else
-	    	    ROS_DEBUG("Too many clusters found, on number %d",j);
+	    	    ROS_INFO("Too many clusters found, on number %d",j);
 	    	j++;
 	    }
 	    
