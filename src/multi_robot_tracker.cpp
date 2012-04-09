@@ -53,7 +53,7 @@
 // Global Variables
 //---------------------------------------------------------------------------
 #define POINT_THRESHOLD (5)
-#define MAX_CLUSTERS 6
+#define MAX_CLUSTERS 4
 typedef pcl::PointXYZ PointT;
 
 
@@ -67,11 +67,11 @@ class RobotTracker
 private:
     ros::NodeHandle n_;
     ros::Subscriber cloud_sub;
-    ros::Publisher cloud_pub[MAX_CLUSTERS];
+    ros::Publisher cloud_pub[MAX_CLUSTERS+1];
     ros::Publisher robots_pub;
-    bool locate;
     Eigen::Affine3f const_transform;
     tf::Transform tf;
+    int number_robots;
 
 public:
     RobotTracker()
@@ -80,20 +80,17 @@ public:
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1,
 				     &RobotTracker::cloudcb, this);
 	    robots_pub = n_.advertise<puppeteer_msgs::Robots>
-		("robot_positions", 100);
+		("/robot_positions", 100);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2>
-		("filtered_cloud", 1);
-	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2>
-		("cluster_1_cloud", 1);
-	    cloud_pub[2] = n_.advertise<sensor_msgs::PointCloud2>
-		("cluster_2_cloud", 1);
-	    cloud_pub[3] = n_.advertise<sensor_msgs::PointCloud2>
-		("cluster_3_cloud", 1);
-	    cloud_pub[4] = n_.advertise<sensor_msgs::PointCloud2>
-		("cluster_4_cloud", 1);
-	    cloud_pub[5] = n_.advertise<sensor_msgs::PointCloud2>
-		("downsampled_cloud", 1);  
-	    locate = true;
+		("/filtered_cloud", 1);
+	    int i = 1;
+	    for (i=1; i<MAX_CLUSTERS+1; i++)
+	    {
+		std::stringstream ss;
+		ss << "/cluster_" << i << "_cloud";
+		cloud_pub[i] = n_.advertise<sensor_msgs::PointCloud2>
+		    (ss.str(), 1);
+	    }
 	    tf::StampedTransform t;
 	    tf::TransformListener listener;
 
@@ -115,6 +112,13 @@ public:
 		ROS_ERROR("%s", ex.what());
 		ros::shutdown();
 	    }
+
+	    // get number of robots
+	    if(ros::param::has("/number_robots")) 
+		ros::param::get("/number_robots", number_robots);
+	    else
+		number_robots = 1;		
+		
 	}
 
     // this function gets called every time new pcl data comes in
@@ -122,7 +126,7 @@ public:
 	{
 	    ROS_DEBUG("cloudcb started");
 	    ros::Time time = ros::Time::now();
-	    // Eigen::Vector4f centroid;
+	    Eigen::Vector4f centroid;
 	    // float D_sphere = 0.05; //meters
 	    // float R_search = 2.0*D_sphere;
 	    geometry_msgs::Point point;
@@ -137,8 +141,6 @@ public:
 		cloud_downsampled (new pcl::PointCloud<pcl::PointXYZ> ()),
 		cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
 	    	    
-		    
-
 	    // set a parameter telling the world that I am tracking the robot
 	    ros::param::set("/tracking_robot", true);
 
@@ -184,9 +186,9 @@ public:
 		"/oriented_optimization_frame";
 	    cloud_pub[5].publish(ros_cloud_filtered);	    
 
-	    std::cout << "Original size = " << cloud->points.size() << std::endl;
-	    std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
-	    std::cout << "Downsampled size = " << cloud_downsampled->points.size() << std::endl;
+	    // std::cout << "Original size = " << cloud->points.size() << std::endl;
+	    // std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
+	    // std::cout << "Downsampled size = " << cloud_downsampled->points.size() << std::endl;
 	    
 	    ROS_DEBUG("Begin extraction filtering");
 	    // build a KdTree object for the search method of the extraction
@@ -210,12 +212,17 @@ public:
 
 	    // run through the indices, create new clouds, and then publish them
 	    int j=1;
+	    int number_clusters=0;
+	    geometry_msgs::PointStamped pt;
+	    puppeteer_msgs::Robots robots;
+	    std::vector<int> num;
+
 	    for (std::vector<pcl::PointIndices>::const_iterator
 	    	     it=cluster_indices.begin();
 	    	 it!=cluster_indices.end (); ++it)
 	    {
-	    	ROS_DEBUG("Number of clusters found: %d",
-	    			   (int) cluster_indices.size());
+		number_clusters = (int) cluster_indices.size();
+	    	ROS_DEBUG("Number of clusters found: %d",number_clusters);
 	    	pcl::PointCloud<pcl::PointXYZ>::Ptr
 	    	    cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
 	    	for (std::vector<int>::const_iterator
@@ -233,21 +240,38 @@ public:
 	    	pcl::toROSMsg(*cloud_cluster, *ros_cloud_filtered);
 		ros_cloud_filtered->header.frame_id =
 		    "/oriented_optimization_frame";
-	    	if(j<MAX_CLUSTERS-1)
+	    	if(j < MAX_CLUSTERS+1)
 	    	    cloud_pub[j].publish(ros_cloud_filtered);
 	    	else
 	    	    ROS_INFO("Too many clusters found, on number %d",j);
 	    	j++;
+
+		// compute centroid and add to Robots:
+		pcl::compute3DCentroid(*cloud_cluster, centroid);
+		pt.point.x = centroid(0);
+		pt.point.y = centroid(1);
+		pt.point.z = centroid(2);
+		pt.header.stamp = tstamp;
+		pt.header.frame_id = "/oriented_optimization_frame";
+		robots.robots.push_back(pt);
+		// add number of points in cluster to num:
+		num.push_back(cloud_cluster->points.size());		
+	    }
+
+	    if (number_clusters > number_robots)
+	    {
+		ROS_WARN("Number of clusters found is greater "
+			 "than the number of robots");
+		// pop minimum cluster count
+		remove_least_likely(robots, num);
 	    }
 	    
-	    // pcl::compute3DCentroid(*cloud_filtered, centroid);
-	    // xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
+	    robots.header.stamp = tstamp;
+	    robots.header.frame_id = "/oriented_optimization_frame";
+	    robots.number = number_robots;
 
-	    // pcl::toROSMsg(*cloud_filtered, *robot_cloud);
-	    // robot_cloud_filtered->header.frame_id =
-	    // 	"/oriented_optimization_frame";
-	    // cloud_pub[0].publish(robot_cloud);
-
+	    robots_pub.publish(robots);
+	    
 	    ros::Duration d = ros::Time::now()-time;
 	    ROS_DEBUG("End of cloudcb; time elapsed = %f", d.toSec());
 	}
@@ -284,6 +308,50 @@ public:
 
 	    return;
 	}
+
+    void remove_least_likely(puppeteer_msgs::Robots r, std::vector<int> n)
+	{
+	    // we just need to find the point cloud with the fewest
+	    // number of points, and pop it out of r and n
+
+	    int j=0;
+	    int number_clusters = (int) (n.size());
+	    ROS_DEBUG("cl-ro = %d - %d = %d",number_clusters, number_robots,
+		      number_clusters-number_robots);
+	    // std::vector<int>::iterator it;
+	    // std::cout << "vin" ;
+	    // for(it=n.begin(); it<n.end(); it++)
+	    // 	std::cout << " " << *it ;
+	    // std::cout << std::endl;
+
+	    // std::cout << "r.x.in " ; 
+	    // for (j=0; j<((int) r.robots.size()); j++)
+	    // 	std::cout << " " << r.robots[j].point.x;
+	    // std::cout << std::endl;	    
+	    
+	    for (j=0; j<number_clusters-number_robots; j++)
+	    {
+		// get location of minimum element:
+		std::vector<int>::iterator loc =
+		    std::min_element(n.begin(), n.end());
+		// pop values
+		r.robots.erase(r.robots.begin()+std::distance(n.begin(), loc));
+		n.erase(n.begin()+std::distance(n.begin(), loc));
+	    }	    
+	    // std::cout << "vout" ;
+	    // for(it=n.begin(); it<n.end(); it++)
+	    // 	std::cout << " " << *it ;
+	    // std::cout << std::endl;
+
+	    
+	    // std::cout << "r.x.out " ; 
+	    // for (j=0; j<((int) r.robots.size()); j++)
+	    // 	std::cout << " " << r.robots[j].point.x;
+	    // std::cout << std::endl;	    
+	    
+	    
+	    return;
+	}
 		    
 };
 
@@ -294,13 +362,13 @@ public:
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "robot_tracker");
+    ros::init(argc, argv, "multi_robot_tracker");
 
-    // turn on debugging
-    log4cxx::LoggerPtr my_logger =
-    log4cxx::Logger::getLogger(ROSCONSOLE_DEFAULT_NAME);
-    my_logger->setLevel(
-    ros::console::g_level_lookup[ros::console::levels::Debug]);
+    // // turn on debugging
+    // log4cxx::LoggerPtr my_logger =
+    // log4cxx::Logger::getLogger(ROSCONSOLE_DEFAULT_NAME);
+    // my_logger->setLevel(
+    // ros::console::g_level_lookup[ros::console::levels::Debug]);
 
     ros::NodeHandle n;
 
