@@ -4,13 +4,16 @@
 //---------------------------------------------------------------------------
 // Notes
 // ---------------------------------------------------------------------------
-// This node is for tracking a robot.  It should be launched from a
-// launch file that defines a coordinate transform from the kinect's
-// depth frame to a frame aligned with my optimization code.
+// This node is for tracking mulitple robots.  A pass-through filter
+// is applied to the raw Kinect data.  The filtered data is then
+// downsampled.  The downsampled data then has a Euclidean cluster
+// extraction algorithm applied to find the robots.  The centroids of
+// these clusters are then passed onto the coordinator node to handle
+// the data association problem.  
 
-//---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Includes
-//---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
@@ -263,7 +266,7 @@ public:
 		ROS_WARN("Number of clusters found is greater "
 			 "than the number of robots");
 		// pop minimum cluster count
-		remove_least_likely(robots, num);
+		remove_least_likely(&robots, &num);
 	    }
 	    
 	    robots.header.stamp = tstamp;
@@ -309,46 +312,25 @@ public:
 	    return;
 	}
 
-    void remove_least_likely(puppeteer_msgs::Robots r, std::vector<int> n)
+    void remove_least_likely(puppeteer_msgs::Robots* r, std::vector<int>* n)
 	{
 	    // we just need to find the point cloud with the fewest
 	    // number of points, and pop it out of r and n
 
 	    int j=0;
-	    int number_clusters = (int) (n.size());
+	    int number_clusters = (int) (n->size());
 	    ROS_DEBUG("cl-ro = %d - %d = %d",number_clusters, number_robots,
 		      number_clusters-number_robots);
-	    // std::vector<int>::iterator it;
-	    // std::cout << "vin" ;
-	    // for(it=n.begin(); it<n.end(); it++)
-	    // 	std::cout << " " << *it ;
-	    // std::cout << std::endl;
 
-	    // std::cout << "r.x.in " ; 
-	    // for (j=0; j<((int) r.robots.size()); j++)
-	    // 	std::cout << " " << r.robots[j].point.x;
-	    // std::cout << std::endl;	    
-	    
 	    for (j=0; j<number_clusters-number_robots; j++)
 	    {
 		// get location of minimum element:
 		std::vector<int>::iterator loc =
-		    std::min_element(n.begin(), n.end());
+		    std::min_element(n->begin(), n->end());
 		// pop values
-		r.robots.erase(r.robots.begin()+std::distance(n.begin(), loc));
-		n.erase(n.begin()+std::distance(n.begin(), loc));
+		r->robots.erase(r->robots.begin()+std::distance(n->begin(), loc));
+		n->erase(n->begin()+std::distance(n->begin(), loc));
 	    }	    
-	    // std::cout << "vout" ;
-	    // for(it=n.begin(); it<n.end(); it++)
-	    // 	std::cout << " " << *it ;
-	    // std::cout << std::endl;
-
-	    
-	    // std::cout << "r.x.out " ; 
-	    // for (j=0; j<((int) r.robots.size()); j++)
-	    // 	std::cout << " " << r.robots[j].point.x;
-	    // std::cout << std::endl;	    
-	    
 	    
 	    return;
 	}
