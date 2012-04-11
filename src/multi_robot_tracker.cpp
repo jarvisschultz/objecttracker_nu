@@ -74,8 +74,6 @@ private:
     Eigen::Affine3f const_transform;
     tf::Transform tf;
     int number_robots;
-    // puppeteer_msgs::Robots tmp;
-    // geometry_msgs::PointStamped tmp_pt;
 
 public:
     RobotTracker()
@@ -123,21 +121,6 @@ public:
 	    else
 		number_robots = 1;
 
-
-	    // tmp.header.stamp = ros::Time::now();
-	    // tmp.header.frame_id = "/oriented_optimization_frame";
-	    // tmp.number = 2;
-	    // tmp_pt.header.stamp = tmp.header.stamp;
-	    // tmp_pt.header.frame_id = tmp.header.frame_id;
-	    // tmp_pt.point.x = 1.0;
-	    // tmp_pt.point.y = 0.2;
-	    // tmp_pt.point.z = 2.0;
-	    // tmp.robots.push_back(tmp_pt);
-	    	    
-	    // tmp_pt.point.x = -1.0;
-	    // tmp_pt.point.y = 0.2;
-	    // tmp_pt.point.z = 2.0;
-	    // tmp.robots.push_back(tmp_pt);
 	    return;
 	}
 
@@ -147,8 +130,6 @@ public:
 	    ROS_DEBUG("cloudcb started");
 	    ros::Time time = ros::Time::now();
 	    Eigen::Vector4f centroid;
-	    // float D_sphere = 0.05; //meters
-	    // float R_search = 2.0*D_sphere;
 	    geometry_msgs::Point point;
 	    pcl::PassThrough<pcl::PointXYZ> pass;
 	    Eigen::VectorXf lims(6);
@@ -201,15 +182,7 @@ public:
 	    vg.setInputCloud (cloud_filtered);
 	    vg.setLeafSize (0.01f, 0.01f, 0.01f);
 	    vg.filter (*cloud_downsampled);
-	    // pcl::toROSMsg(*cloud_downsampled, *ros_cloud_filtered);
-	    // ros_cloud_filtered->header.frame_id =
-	    // 	"/oriented_optimization_frame";
-	    // cloud_pub[5].publish(ros_cloud_filtered);	    
 
-	    // std::cout << "Original size = " << cloud->points.size() << std::endl;
-	    // std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
-	    // std::cout << "Downsampled size = " << cloud_downsampled->points.size() << std::endl;
-	    
 	    ROS_DEBUG("Begin extraction filtering");
 	    // build a KdTree object for the search method of the extraction
 	    pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr tree
@@ -288,7 +261,7 @@ public:
 	    
 	    robots.header.stamp = tstamp;
 	    robots.header.frame_id = "/oriented_optimization_frame";
-	    robots.number = number_robots;
+	    robots.number = number_clusters;
 
 	    robots_pub.publish(robots);
 
