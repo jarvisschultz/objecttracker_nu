@@ -51,12 +51,11 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
-
 //---------------------------------------------------------------------------
 // Global Variables
 //---------------------------------------------------------------------------
 #define POINT_THRESHOLD (5)
-#define MAX_CLUSTERS 4
+#define MAX_CLUSTERS 2
 typedef pcl::PointXYZ PointT;
 
 
@@ -75,6 +74,8 @@ private:
     Eigen::Affine3f const_transform;
     tf::Transform tf;
     int number_robots;
+    // puppeteer_msgs::Robots tmp;
+    // geometry_msgs::PointStamped tmp_pt;
 
 public:
     RobotTracker()
@@ -83,16 +84,16 @@ public:
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1,
 				     &RobotTracker::cloudcb, this);
 	    robots_pub = n_.advertise<puppeteer_msgs::Robots>
-		("/robot_positions", 100);
+	    	("/robot_positions", 100);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2>
-		("/filtered_cloud", 1);
+	    	("/filtered_cloud", 1);
 	    int i = 1;
 	    for (i=1; i<MAX_CLUSTERS+1; i++)
 	    {
-		std::stringstream ss;
-		ss << "/cluster_" << i << "_cloud";
-		cloud_pub[i] = n_.advertise<sensor_msgs::PointCloud2>
-		    (ss.str(), 1);
+	    	std::stringstream ss;
+	    	ss << "/cluster_" << i << "_cloud";
+	    	cloud_pub[i] = n_.advertise<sensor_msgs::PointCloud2>
+	    	    (ss.str(), 100);
 	    }
 	    tf::StampedTransform t;
 	    tf::TransformListener listener;
@@ -120,8 +121,24 @@ public:
 	    if(ros::param::has("/number_robots")) 
 		ros::param::get("/number_robots", number_robots);
 	    else
-		number_robots = 1;		
-		
+		number_robots = 1;
+
+
+	    // tmp.header.stamp = ros::Time::now();
+	    // tmp.header.frame_id = "/oriented_optimization_frame";
+	    // tmp.number = 2;
+	    // tmp_pt.header.stamp = tmp.header.stamp;
+	    // tmp_pt.header.frame_id = tmp.header.frame_id;
+	    // tmp_pt.point.x = 1.0;
+	    // tmp_pt.point.y = 0.2;
+	    // tmp_pt.point.z = 2.0;
+	    // tmp.robots.push_back(tmp_pt);
+	    	    
+	    // tmp_pt.point.x = -1.0;
+	    // tmp_pt.point.y = 0.2;
+	    // tmp_pt.point.z = 2.0;
+	    // tmp.robots.push_back(tmp_pt);
+	    return;
 	}
 
     // this function gets called every time new pcl data comes in
@@ -184,10 +201,10 @@ public:
 	    vg.setInputCloud (cloud_filtered);
 	    vg.setLeafSize (0.01f, 0.01f, 0.01f);
 	    vg.filter (*cloud_downsampled);
-	    pcl::toROSMsg(*cloud_downsampled, *ros_cloud_filtered);
-	    ros_cloud_filtered->header.frame_id =
-		"/oriented_optimization_frame";
-	    cloud_pub[5].publish(ros_cloud_filtered);	    
+	    // pcl::toROSMsg(*cloud_downsampled, *ros_cloud_filtered);
+	    // ros_cloud_filtered->header.frame_id =
+	    // 	"/oriented_optimization_frame";
+	    // cloud_pub[5].publish(ros_cloud_filtered);	    
 
 	    // std::cout << "Original size = " << cloud->points.size() << std::endl;
 	    // std::cout << "Filtered size = " << cloud_filtered->points.size() << std::endl;
@@ -274,7 +291,7 @@ public:
 	    robots.number = number_robots;
 
 	    robots_pub.publish(robots);
-	    
+
 	    ros::Duration d = ros::Time::now()-time;
 	    ROS_DEBUG("End of cloudcb; time elapsed = %f", d.toSec());
 	}
