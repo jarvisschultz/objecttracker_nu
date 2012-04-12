@@ -55,7 +55,7 @@
 // Global Variables
 //---------------------------------------------------------------------------
 #define POINT_THRESHOLD (5)
-#define MAX_CLUSTERS 2
+#define MAX_CLUSTERS 4
 typedef pcl::PointXYZ PointT;
 
 
@@ -84,14 +84,14 @@ public:
 	    robots_pub = n_.advertise<puppeteer_msgs::Robots>
 	    	("/robot_positions", 100);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2>
-	    	("/filtered_cloud", 10);
+		("/filtered_cloud", 1);
 	    int i = 1;
 	    for (i=1; i<MAX_CLUSTERS+1; i++)
 	    {
-	    	std::stringstream ss;
-	    	ss << "/cluster_" << i << "_cloud";
-	    	cloud_pub[i] = n_.advertise<sensor_msgs::PointCloud2>
-	    	    (ss.str(), 100);
+		std::stringstream ss;
+		ss << "/cluster_" << i << "_cloud";
+		cloud_pub[i] = n_.advertise<sensor_msgs::PointCloud2>
+		    (ss.str(), 1);
 	    }
 	    tf::StampedTransform t;
 	    tf::TransformListener listener;
@@ -182,6 +182,9 @@ public:
 	    vg.setInputCloud (cloud_filtered);
 	    vg.setLeafSize (0.01f, 0.01f, 0.01f);
 	    vg.filter (*cloud_downsampled);
+	    pcl::toROSMsg(*cloud_downsampled, *ros_cloud_filtered);
+	    ros_cloud_filtered->header.frame_id =
+		"/oriented_optimization_frame";
 
 	    ROS_DEBUG("Begin extraction filtering");
 	    // build a KdTree object for the search method of the extraction
