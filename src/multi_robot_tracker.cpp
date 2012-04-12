@@ -235,8 +235,6 @@ public:
 		    "/oriented_optimization_frame";
 	    	if(j < MAX_CLUSTERS+1)
 	    	    cloud_pub[j].publish(ros_cloud_filtered);
-	    	else
-	    	    ROS_INFO("Too many clusters found, on number %d",j);
 	    	j++;
 
 		// compute centroid and add to Robots:
