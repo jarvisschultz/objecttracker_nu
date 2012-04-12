@@ -182,9 +182,6 @@ public:
 	    vg.setInputCloud (cloud_filtered);
 	    vg.setLeafSize (0.01f, 0.01f, 0.01f);
 	    vg.filter (*cloud_downsampled);
-	    pcl::toROSMsg(*cloud_downsampled, *ros_cloud_filtered);
-	    ros_cloud_filtered->header.frame_id =
-		"/oriented_optimization_frame";
 
 	    ROS_DEBUG("Begin extraction filtering");
 	    // build a KdTree object for the search method of the extraction
