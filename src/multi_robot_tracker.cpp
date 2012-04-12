@@ -84,7 +84,7 @@ public:
 	    robots_pub = n_.advertise<puppeteer_msgs::Robots>
 	    	("/robot_positions", 100);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2>
-	    	("/filtered_cloud", 1);
+	    	("/filtered_cloud", 10);
 	    int i = 1;
 	    for (i=1; i<MAX_CLUSTERS+1; i++)
 	    {
@@ -264,7 +264,8 @@ public:
 	    robots_pub.publish(robots);
 
 	    ros::Duration d = ros::Time::now()-time;
-	    ROS_DEBUG("End of cloudcb; time elapsed = %f", d.toSec());
+	    ROS_DEBUG("End of cloudcb; time elapsed = %f (%f Hz)",
+		      d.toSec(), 1/d.toSec());
 	}
 
     void pass_through(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
@@ -342,7 +343,7 @@ int main(int argc, char **argv)
 
     ros::NodeHandle n;
 
-    ROS_INFO("Starting Robot Tracker...\n");
+    ROS_INFO("Starting Multi-Robot Tracker...\n");
     RobotTracker tracker;
   
     ros::spin();
