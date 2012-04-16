@@ -46,6 +46,7 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
+#include "frame_limits.h"
 
 //---------------------------------------------------------------------------
 // Global Variables
@@ -169,7 +170,8 @@ public:
 	    if (locate == true)
 	    {
 		found_flag = 0;
-	    	lims << -1.0, 1.0, -1.6, -0.30, 0.0, 2.45;
+	    	// lims << -1.0, 1.0, -1.6, -0.30, 0.0, 2.45;
+		lims << XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);

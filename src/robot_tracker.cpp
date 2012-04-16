@@ -17,6 +17,8 @@
 #include <boost/thread/condition.hpp>
 
 #include <iostream>
+#include <sstream>
+#include <fstream>
 
 #include <ros/ros.h>
 #include <Eigen/Dense>
@@ -46,12 +48,12 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
-
 //---------------------------------------------------------------------------
 // Global Variables
 //---------------------------------------------------------------------------
 #define POINT_THRESHOLD (5)
 typedef pcl::PointXYZ PointT;
+std::string filename;
 
 
 //---------------------------------------------------------------------------
@@ -73,6 +75,7 @@ private:
     puppeteer_msgs::speed_command srv;
     Eigen::Affine3f const_transform;
     tf::Transform tf;
+    Eigen::VectorXf frame_limits;
 
 public:
     RobotTracker()
@@ -93,6 +96,8 @@ public:
 	    tf::StampedTransform t;
 	    tf::TransformListener listener;
 
+	    get_frame_limits(filename);
+	    
 	    try
 	    {
 		ros::Time now=ros::Time::now();
@@ -162,7 +167,8 @@ public:
 	    // do we need to find the object?
 	    if (locate == true)
 	    {
-	    	lims << -1.0, 1.0, -0.1, 1.0, 0.0, 3.5;
+		// lims << XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX;
+		lims << frame_limits;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
@@ -288,6 +294,32 @@ public:
 
 	    return;
 	}
+
+    void get_frame_limits(std::string f)
+	{
+	    // first define the size of of the limits vector:
+	    frame_limits.resize(6);
+
+	    // open the file
+	    std::ifstream file;
+	    std::string line;
+	    float tmp;
+	    file.open(f.c_str(), std::fstream::in);
+	    for (int i=0; i<6; i++)
+	    {
+		getline(file, line);
+		tmp = atof(line.c_str());
+		frame_limits(i) = tmp;
+	    }
+
+	    std::cout << "read in limits " << std::endl;
+	    for (int i=0; i<6; i++)
+	    	std::cout << frame_limits(i) << std::endl;
+	       
+	    file.close();
+
+	    return;
+	}
 		    
 };
 
@@ -298,13 +330,21 @@ public:
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "robot_tracker");
-  ros::NodeHandle n;
+    // get the filename:
+    std::string working_dir;
+    working_dir = argv[0];
+    std::size_t found = working_dir.find("bin");
+    std::string tmp_dir = working_dir.substr(0, found);
+    working_dir = tmp_dir+"launch/";
+    filename = working_dir+"robot_limits.txt";
+    
+    ros::init(argc, argv, "robot_tracker");
+    ros::NodeHandle n;
 
-  ROS_INFO("Starting Robot Tracker...\n");
-  RobotTracker tracker;
+    ROS_INFO("Starting Robot Tracker...\n");
+    RobotTracker tracker;
   
-  ros::spin();
+    ros::spin();
   
-  return 0;
+    return 0;
 }

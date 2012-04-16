@@ -51,6 +51,8 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
+#include "robot_limits.h"
+
 //---------------------------------------------------------------------------
 // Global Variables
 //---------------------------------------------------------------------------
@@ -167,7 +169,8 @@ public:
 
 	    // run through pass-through filter to eliminate tarp and below robots.
 	    ROS_DEBUG("Pass-through filter");
-	    lims << -1.0, 1.0, -0.1, 1.0, 0.0, 3.5;
+	    // lims << -1.0, 1.0, -0.1, 1.0, 0.0, 3.5;
+	    lims << XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX;
 	    pass_through(cloud, cloud_filtered, lims);
 
 	    // now let's publish that filtered cloud
