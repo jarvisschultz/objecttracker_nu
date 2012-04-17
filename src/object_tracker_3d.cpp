@@ -17,6 +17,8 @@
 #include <boost/thread/condition.hpp>
 
 #include <iostream>
+#include <sstream>
+#include <fstream>
 
 #include <ros/ros.h>
 #include <Eigen/Dense>
@@ -46,14 +48,12 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
-#include "frame_limits.h"
-
 //---------------------------------------------------------------------------
 // Global Variables
 //---------------------------------------------------------------------------
 #define POINT_THRESHOLD (5)
 typedef pcl::PointXYZ PointT;
-
+std::string filename;
 
 //---------------------------------------------------------------------------
 // Objects and Functions
@@ -76,10 +76,14 @@ private:
     tf::Transform tf;
     ros::Time t_now_timer, t_last_timer;
     float dt_timer;
+    Eigen::VectorXf frame_limits;
 
 public:
     ObjectTracker()
 	{
+	    // get filter limits:
+	    get_frame_limits(filename);
+
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1,
 				     &ObjectTracker::cloudcb, this);
 	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus>
@@ -170,8 +174,7 @@ public:
 	    if (locate == true)
 	    {
 		found_flag = 0;
-	    	// lims << -1.0, 1.0, -1.6, -0.30, 0.0, 2.45;
-		lims << XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX;
+	    	lims << frame_limits;
 	    	pass_through(cloud, cloud_filtered, lims);
 		
 	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
@@ -328,7 +331,31 @@ public:
 
 	    return;
 	}
-		    
+
+
+    void get_frame_limits(std::string f)
+	{
+	    // first define the size of of the limits vector:
+	    frame_limits.resize(6);
+
+	    // open the file
+	    std::ifstream file;
+	    std::string line;
+	    float tmp;
+	    file.open(f.c_str(), std::fstream::in);
+	    for (int i=0; i<6; i++)
+	    {
+		getline(file, line);
+		tmp = atof(line.c_str());
+		frame_limits(i) = tmp;
+	    }
+	    file.close();
+	    for (int i=0; i<6; i++)
+		std::cout << frame_limits(i) << std::endl;
+
+	    return;
+	}
+		        
 };
 
 
@@ -338,13 +365,21 @@ public:
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "object_tracker");
-  ros::NodeHandle n;
+    // get the filename:
+    std::string working_dir;
+    working_dir = argv[0];
+    std::size_t found = working_dir.find("bin");
+    std::string tmp_dir = working_dir.substr(0, found);
+    working_dir = tmp_dir+"launch/";
+    filename = working_dir+"frame_limits.txt";
 
-  ROS_INFO("Starting Object Tracker...\n");
-  ObjectTracker tracker;
+    ros::init(argc, argv, "object_tracker");
+    ros::NodeHandle n;
+
+    ROS_INFO("Starting Object Tracker...\n");
+    ObjectTracker tracker;
   
-  ros::spin();
+    ros::spin();
   
-  return 0;
+    return 0;
 }

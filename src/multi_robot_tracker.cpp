@@ -20,6 +20,8 @@
 #include <boost/thread/condition.hpp>
 
 #include <iostream>
+#include <sstream>
+#include <fstream>
 
 #include <ros/ros.h>
 #include <Eigen/Dense>
@@ -51,7 +53,6 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
-#include "robot_limits.h"
 
 //---------------------------------------------------------------------------
 // Global Variables
@@ -59,7 +60,7 @@
 #define POINT_THRESHOLD (5)
 #define MAX_CLUSTERS 4
 typedef pcl::PointXYZ PointT;
-
+std::string filename;
 
 //---------------------------------------------------------------------------
 // Objects and Functions
@@ -76,10 +77,14 @@ private:
     Eigen::Affine3f const_transform;
     tf::Transform tf;
     int number_robots;
+    Eigen::VectorXf frame_limits;
 
 public:
     RobotTracker()
 	{
+	    // get filter limits:
+	    get_frame_limits(filename);
+
 	    ROS_DEBUG("Creating subscribers and publishers");
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1,
 				     &RobotTracker::cloudcb, this);
@@ -169,8 +174,7 @@ public:
 
 	    // run through pass-through filter to eliminate tarp and below robots.
 	    ROS_DEBUG("Pass-through filter");
-	    // lims << -1.0, 1.0, -0.1, 1.0, 0.0, 3.5;
-	    lims << XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX;
+	    lims << frame_limits;
 	    pass_through(cloud, cloud_filtered, lims);
 
 	    // now let's publish that filtered cloud
@@ -326,6 +330,27 @@ public:
 	    
 	    return;
 	}
+
+    void get_frame_limits(std::string f)
+	{
+	    // first define the size of of the limits vector:
+	    frame_limits.resize(6);
+
+	    // open the file
+	    std::ifstream file;
+	    std::string line;
+	    float tmp;
+	    file.open(f.c_str(), std::fstream::in);
+	    for (int i=0; i<6; i++)
+	    {
+		getline(file, line);
+		tmp = atof(line.c_str());
+		frame_limits(i) = tmp;
+	    }
+	    file.close();
+
+	    return;
+	}
 		    
 };
 
@@ -336,6 +361,14 @@ public:
 
 int main(int argc, char **argv)
 {
+    // get the filename:
+    std::string working_dir;
+    working_dir = argv[0];
+    std::size_t found = working_dir.find("bin");
+    std::string tmp_dir = working_dir.substr(0, found);
+    working_dir = tmp_dir+"launch/";
+    filename = working_dir+"robot_limits.txt";
+        
     ros::init(argc, argv, "multi_robot_tracker");
 
     // // turn on debugging

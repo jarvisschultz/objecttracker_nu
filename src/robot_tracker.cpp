@@ -311,11 +311,6 @@ public:
 		tmp = atof(line.c_str());
 		frame_limits(i) = tmp;
 	    }
-
-	    std::cout << "read in limits " << std::endl;
-	    for (int i=0; i<6; i++)
-	    	std::cout << frame_limits(i) << std::endl;
-	       
 	    file.close();
 
 	    return;
