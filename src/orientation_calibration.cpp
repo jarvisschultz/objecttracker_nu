@@ -33,7 +33,6 @@
 #include <puppeteer_msgs/speed_command.h>
 #include <geometry_msgs/Point.h>
 
-#include <pcl/common/transform.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/passthrough.h>
@@ -143,12 +142,14 @@ public:
 
 	    ROS_DEBUG("Setting up normal estimation parameters");
 	    // Create a KD-Tree
-	    pcl::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::KdTreeFLANN<pcl::PointXYZ>);
+	    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree
+		(new pcl::search::KdTree<pcl::PointXYZ>);
 	    tree->setInputCloud (cloud_out);
 	    // Now, let's estimate the normals of this cloud:
 	    pcl::PointCloud<pcl::PointXYZ> mls_points;
 	    pcl::MovingLeastSquares<pcl::PointXYZ, pcl::Normal> mls;
-	    pcl::PointCloud<pcl::Normal>::Ptr mls_normals (new pcl::PointCloud<pcl::Normal> ());
+	    pcl::PointCloud<pcl::Normal>::Ptr mls_normals
+		(new pcl::PointCloud<pcl::Normal> ());
 	    mls.setOutputNormals (mls_normals);
 
 	    // Set sampling parameters

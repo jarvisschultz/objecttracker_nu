@@ -41,7 +41,6 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/pcl_base.h>
-#include <pcl/common/transform.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl_ros/transforms.h>
 
