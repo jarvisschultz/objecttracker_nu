@@ -228,7 +228,7 @@ public:
 	    // set time stamp and frame id
 	    ros::Time tstamp = ros::Time::now();
 	    pointplus.header.stamp = tstamp;
-	    pointplus.header.frame_id = "openni_depth_optical_frame";
+	    pointplus.header.frame_id = "camera_depth_optical_frame";
 
 	    // did we lose the object?
 	    if (locate == true)
@@ -341,7 +341,7 @@ public:
 		static tf::TransformBroadcaster br;
 		br.sendTransform(tf::StampedTransform
 				 (transform,ros::Time::now(),
-				  "openni_depth_optical_frame","object1"));
+				  "camera_depth_optical_frame","object1"));
 
 		// set point message values and publish
 		point.x = xpos;
@@ -440,7 +440,7 @@ public:
 					     btVector3(orig(0),orig(1),orig(2)));
 	    
 	    br.sendTransform(tf::StampedTransform
-			     (tr, ros::Time::now(), "openni_depth_optical_frame",
+			     (tr, ros::Time::now(), "camera_depth_optical_frame",
 			      "oriented_optimization_frame"));
 
 	    if (complete_flag == true)
@@ -486,7 +486,7 @@ public:
 	    // get the rotation matrix into a quaternion
 	    // tf::StampedTransform t;
 	    // tf::TransformListener listener;
-	    // listener.lookupTransform ( "openni_depth_optical_frame",
+	    // listener.lookupTransform ( "camera_depth_optical_frame",
 	    // 			  "oriented_optimization_frame",
 	    // 			  ros::Time::now(), t);
 	    Eigen::Quaternion<float> q;
@@ -495,7 +495,7 @@ public:
 		 << orig (1) << " " << orig(2) << " " 
 		 << q.x() << " " << q.y() << " "
 		 << q.z() << " " << q.w() << " "
-		 << "openni_depth_optical_frame "
+		 << "camera_depth_optical_frame "
 		 << "oriented_optimization_frame "
 		 << "100" << "\" />" << "\n" << "</launch>";	    	    
 

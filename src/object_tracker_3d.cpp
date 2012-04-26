@@ -103,11 +103,11 @@ public:
 	    try
 	    {
 		ros::Time now=ros::Time::now();
-		listener.waitForTransform("/openni_depth_optical_frame",
+		listener.waitForTransform("/camera_depth_optical_frame",
 					 "/oriented_optimization_frame",
 					  now, ros::Duration(1.0));
 		listener.lookupTransform("/oriented_optimization_frame",
-					 "/openni_depth_optical_frame",
+					 "/camera_depth_optical_frame",
 					 ros::Time(0), t);
 		tf = t;	    
 

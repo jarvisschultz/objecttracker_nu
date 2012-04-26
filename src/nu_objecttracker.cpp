@@ -229,7 +229,7 @@ public:
 		static tf::TransformBroadcaster br;
 		br.sendTransform(tf::StampedTransform
 				 (transform,ros::Time::now(),
-				  "openni_rgb_optical_frame","object1"));
+				  "camera_depth_optical_frame","object1"));
 
 		// set point message values and publish
 		point.x = xpos;
