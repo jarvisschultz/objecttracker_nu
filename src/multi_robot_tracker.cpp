@@ -74,7 +74,7 @@ private:
     Eigen::Affine3f const_transform;
     tf::Transform tf;
     int number_robots;
-    Eigen::VectorXf frame_limits;
+    Eigen::VectorXf robot_limits;
 
 public:
     RobotTracker()
@@ -171,7 +171,7 @@ public:
 
 	    // run through pass-through filter to eliminate tarp and below robots.
 	    ROS_DEBUG("Pass-through filter");
-	    lims << frame_limits;
+	    lims << robot_limits;
 	    pass_through(cloud, cloud_filtered, lims);
 
 	    // now let's publish that filtered cloud
@@ -331,7 +331,7 @@ public:
     void get_frame_limits(std::string f)
 	{
 	    // first define the size of of the limits vector:
-	    frame_limits.resize(6);
+	    robot_limits.resize(6);
 
 	    // open the file
 	    std::ifstream file;
@@ -342,7 +342,7 @@ public:
 	    {
 		getline(file, line);
 		tmp = atof(line.c_str());
-		frame_limits(i) = tmp;
+		robot_limits(i) = tmp;
 	    }
 	    file.close();
 

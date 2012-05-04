@@ -349,8 +349,6 @@ public:
 		frame_limits(i) = tmp;
 	    }
 	    file.close();
-	    for (int i=0; i<6; i++)
-		std::cout << frame_limits(i) << std::endl;
 
 	    return;
 	}
