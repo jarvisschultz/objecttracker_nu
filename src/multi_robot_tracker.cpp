@@ -75,6 +75,8 @@ private:
     tf::Transform tf;
     int number_robots;
     Eigen::VectorXf robot_limits;
+    Eigen::Vector4f centroid;
+    
 
 public:
     RobotTracker()
@@ -124,7 +126,6 @@ public:
 		ros::param::get("/number_robots", number_robots);
 	    else
 		number_robots = 1;
-
 	    return;
 	}
 
@@ -132,22 +133,27 @@ public:
     void cloudcb(const sensor_msgs::PointCloud2ConstPtr &scan)
 	{
 	    ROS_DEBUG("cloudcb started");
-	    ros::Time time = ros::Time::now();
+	    ros::Time start_time = ros::Time::now();
+	    ros::Time tcur = ros::Time::now();
+
 	    Eigen::Vector4f centroid;
 	    geometry_msgs::Point point;
 	    pcl::PassThrough<pcl::PointXYZ> pass;
 	    Eigen::VectorXf lims(6);
 	    sensor_msgs::PointCloud2::Ptr
-		ros_cloud (new sensor_msgs::PointCloud2 ()),
-		ros_cloud_filtered (new sensor_msgs::PointCloud2 ());    
+	    	ros_cloud (new sensor_msgs::PointCloud2 ()),
+	    	ros_cloud_filtered (new sensor_msgs::PointCloud2 ());    
 
 	    pcl::PointCloud<pcl::PointXYZ>::Ptr
-		cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
-		cloud_downsampled (new pcl::PointCloud<pcl::PointXYZ> ()),
-		cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
-	    	    
+	    	cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
+	    	cloud_downsampled (new pcl::PointCloud<pcl::PointXYZ> ()),
+	    	cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
+	    
 	    // set a parameter telling the world that I am tracking the robot
 	    ros::param::set("/tracking_robot", true);
+
+	    ROS_DEBUG("finished declaring vars : %f", (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
 
 	    ROS_DEBUG("About to transform cloud");
 	    // New sensor message for holding the transformed data
@@ -166,13 +172,19 @@ public:
 	    ROS_DEBUG("Convert cloud to pcd from rosmsg");
 	    pcl::fromROSMsg(*scan_transformed, *cloud);
 
+	    ROS_DEBUG("cloud transformed and converted to pcl : %f",
+		      (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
+	    
 	    // set time stamp and frame id
 	    ros::Time tstamp = ros::Time::now();
 
 	    // run through pass-through filter to eliminate tarp and below robots.
 	    ROS_DEBUG("Pass-through filter");
-	    lims << robot_limits;
-	    pass_through(cloud, cloud_filtered, lims);
+	    pass_through(cloud, cloud_filtered, robot_limits);
+
+	    ROS_DEBUG("done with pass-through : %f", (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
 
 	    // now let's publish that filtered cloud
 	    ROS_DEBUG("Converting and publishing cloud");		      
@@ -181,31 +193,46 @@ public:
 		"/oriented_optimization_frame";
 	    cloud_pub[0].publish(ros_cloud_filtered);
 
+	    ROS_DEBUG("published filtered cloud : %f", (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
+
 	    // Let's do a downsampling before doing cluster extraction
 	    pcl::VoxelGrid<pcl::PointXYZ> vg;
 	    vg.setInputCloud (cloud_filtered);
 	    vg.setLeafSize (0.01f, 0.01f, 0.01f);
 	    vg.filter (*cloud_downsampled);
 
+	    ROS_DEBUG("finished downsampling : %f", (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
+
+
 	    ROS_DEBUG("Begin extraction filtering");
 	    // build a KdTree object for the search method of the extraction
 	    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree
 	    	(new pcl::search::KdTree<pcl::PointXYZ> ());
 	    tree->setInputCloud (cloud_downsampled);
+	    
+	    ROS_DEBUG("done with KdTree initialization : %f",
+		      (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
+
 
 	    // create a vector for storing the indices of the clusters
 	    std::vector<pcl::PointIndices> cluster_indices;
 
 	    // setup extraction:
 	    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-	    ec.setClusterTolerance (0.05); // cm
+	    ec.setClusterTolerance (0.02); // cm
 	    ec.setMinClusterSize (50);
-	    ec.setMaxClusterSize (1000);
+	    ec.setMaxClusterSize (3000);
 	    ec.setSearchMethod (tree);
 	    ec.setInputCloud (cloud_downsampled);
 
 	    // now we can perform cluster extraction
 	    ec.extract (cluster_indices);
+
+	    ROS_DEBUG("finished extraction : %f", (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
 
 	    // run through the indices, create new clouds, and then publish them
 	    int j=1;
@@ -253,6 +280,11 @@ public:
 		num.push_back(cloud_cluster->points.size());		
 	    }
 
+	    ROS_DEBUG("finished creating and publishing clusters : %f", 
+		      (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
+
+
 	    if (number_clusters > number_robots)
 	    {
 		ROS_WARN("Number of clusters found is greater "
@@ -267,7 +299,11 @@ public:
 
 	    robots_pub.publish(robots);
 
-	    ros::Duration d = ros::Time::now()-time;
+	    ROS_DEBUG("removed extra clusters, and published : %f",
+		      (ros::Time::now()-tcur).toSec());
+	    tcur = ros::Time::now();
+
+	    ros::Duration d = ros::Time::now() - start_time;
 	    ROS_DEBUG("End of cloudcb; time elapsed = %f (%f Hz)",
 		      d.toSec(), 1/d.toSec());
 	}
