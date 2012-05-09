@@ -1,5 +1,5 @@
-// Jake Ware and Jarvis Schultz
-// September 13, 2011
+// Jarvis Schultz
+// April 2011
 
 //---------------------------------------------------------------------------
 // Notes
@@ -54,7 +54,6 @@
 //---------------------------------------------------------------------------
 // Global Variables
 //---------------------------------------------------------------------------
-#define POINT_THRESHOLD (5)
 #define MAX_CLUSTERS 4
 typedef pcl::PointXYZ PointT;
 std::string filename;
@@ -140,10 +139,12 @@ public:
 	    geometry_msgs::Point point;
 	    pcl::PassThrough<pcl::PointXYZ> pass;
 	    Eigen::VectorXf lims(6);
+	    // sensor_msgs::PointCloud2 *a;
+	    // a = new sensor_msgs::PointCloud2();
+	    // sensor_msgs::PointCloud2::Ptr ros_cloud(a);
 	    sensor_msgs::PointCloud2::Ptr
-	    	ros_cloud (new sensor_msgs::PointCloud2 ()),
-	    	ros_cloud_filtered (new sensor_msgs::PointCloud2 ());    
-
+		ros_cloud (new sensor_msgs::PointCloud2 ()),
+		ros_cloud_filtered (new sensor_msgs::PointCloud2 ());    
 	    pcl::PointCloud<pcl::PointXYZ>::Ptr
 	    	cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
 	    	cloud_downsampled (new pcl::PointCloud<pcl::PointXYZ> ()),
@@ -404,7 +405,7 @@ int main(int argc, char **argv)
         
     ros::init(argc, argv, "multi_robot_tracker");
 
-    // // turn on debugging
+    // turn on debugging
     // log4cxx::LoggerPtr my_logger =
     // log4cxx::Logger::getLogger(ROSCONSOLE_DEFAULT_NAME);
     // my_logger->setLevel(
