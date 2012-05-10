@@ -85,7 +85,7 @@ public:
 
 	    ROS_DEBUG("Creating subscribers and publishers");
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1,
-				     &RobotTracker::cloudcb, this);
+	    			     &RobotTracker::cloudcb, this);
 	    robots_pub = n_.advertise<puppeteer_msgs::Robots>
 	    	("/robot_positions", 100);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2>
@@ -131,7 +131,7 @@ public:
     // this function gets called every time new pcl data comes in
     void cloudcb(const sensor_msgs::PointCloud2ConstPtr &scan)
 	{
-	    ROS_DEBUG("cloudcb started");
+	    ROS_INFO("Kinect point cloud receieved");
 	    ros::Time start_time = ros::Time::now();
 	    ros::Time tcur = ros::Time::now();
 
@@ -139,9 +139,6 @@ public:
 	    geometry_msgs::Point point;
 	    pcl::PassThrough<pcl::PointXYZ> pass;
 	    Eigen::VectorXf lims(6);
-	    // sensor_msgs::PointCloud2 *a;
-	    // a = new sensor_msgs::PointCloud2();
-	    // sensor_msgs::PointCloud2::Ptr ros_cloud(a);
 	    sensor_msgs::PointCloud2::Ptr
 		ros_cloud (new sensor_msgs::PointCloud2 ()),
 		ros_cloud_filtered (new sensor_msgs::PointCloud2 ());    
