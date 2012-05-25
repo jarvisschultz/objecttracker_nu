@@ -142,7 +142,7 @@ public:
 
 	    // set time stamp and frame id
 	    ros::Time tstamp = ros::Time::now();
-	    // set a parameter telling the world that I am tracking the robot
+	    // set a parameter telling the world that I am tracking the robots
 	    ros::param::set("/tracking_robot", true);
 
 	    ROS_DEBUG("finished declaring vars : %f", (ros::Time::now()-tcur).toSec());
