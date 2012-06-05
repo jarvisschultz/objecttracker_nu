@@ -32,7 +32,6 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
-target_link_libraries (planar_segmentation ${PCL_LIBRARIES})
 
 rosbuild_add_executable(nu_objecttracker src/nu_objecttracker.cpp)
 rosbuild_add_executable(robot_tracker src/robot_tracker.cpp)

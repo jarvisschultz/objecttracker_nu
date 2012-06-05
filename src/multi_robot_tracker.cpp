@@ -84,7 +84,7 @@ public:
 	    get_frame_limits(filename);
 
 	    ROS_DEBUG("Creating subscribers and publishers");
-	    cloud_sub = n_.subscribe("/box_filter/psz/output", 1,
+	    cloud_sub = n_.subscribe("/box_filter/psz/output", 10,
 	    			     &RobotTracker::cloudcb, this);
 	    robots_pub = n_.advertise<puppeteer_msgs::Robots>
 	    	("/robot_positions", 100);
