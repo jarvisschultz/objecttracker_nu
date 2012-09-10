@@ -1,0 +1,58 @@
+<launch>
+  <!-- launch the kinect -->
+  <include file="$(find openni_launch)/launch/openni.launch"/>
+
+  <!-- launch the nodelet manager -->
+  <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen"/>  
+
+  <!-- tracker node and static frame broadcaster -->
+  <include file="$(find objecttracker_nu)/launch/multi_robot_tracking.launch"/>
+
+  <!-- voxel downsampling, and transformation -->
+  <group ns="/cloud_downsampler">
+    <node pkg="nodelet" type="nodelet" name="voxel" args="load pcl/VoxelGrid /pcl_manager" output="screen">  
+      <remap from="~input" to="/camera/depth/points" />
+      <rosparam>
+        filter_field_name: z
+        filter_limit_min: -3.0
+        filter_limit_max: 3.0
+        fiter_limit_negative: True
+        leaf_size: 0.01
+        output_frame: /oriented_optimization_frame
+      </rosparam>
+    </node>
+  </group>
+  
+
+  <!-- pass-through filtering -->  
+  <group ns="/box_filter">
+    <!-- Run a passthrough filter to delimit in x direction -->
+    <node pkg="nodelet" type="nodelet" name="psx" args="load pcl/PassThrough /pcl_manager" output="screen">
+      <remap from="~input" to="/cloud_downsampler/voxel/output" />
+      <rosparam>
+        filter_field_name: x
+        filter_limit_min: -1.0
+        filter_limit_max: 1.0
+      </rosparam>
+    </node>
+    <!-- Run a passthrough filter to delimit in y direction -->
+    <node pkg="nodelet" type="nodelet" name="psy" args="load pcl/PassThrough /pcl_manager" output="screen">
+      <remap from="~input" to="psx/output" />
+      <rosparam>
+        filter_field_name: y
+        filter_limit_min: 0.0
+        filter_limit_max: 1.0
+      </rosparam>
+    </node>
+    <!-- Run a passthrough filter to delimit in z direction -->
+    <node pkg="nodelet" type="nodelet" name="psz" args="load pcl/PassThrough /pcl_manager" output="screen">
+      <remap from="~input" to="psy/output" />
+      <rosparam>
+        filter_field_name: z
+        filter_limit_min: 0.0
+        filter_limit_max: 2.5
+      </rosparam>
+    </node>
+  </group>
+
+</launch>
