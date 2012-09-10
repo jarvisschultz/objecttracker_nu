@@ -165,8 +165,7 @@ public:
 	    pcl::fromROSMsg(*scan_transformed, *cloud);
 
 	    // set time stamp and frame id
-	    ros::Time tstamp = ros::Time::now();
-	    pointplus.header.stamp = tstamp;
+	    pointplus.header.stamp = scan->header.stamp;
 	    pointplus.header.frame_id = "/oriented_optimization_frame";
 
 	    // do we need to find the object?
