@@ -38,7 +38,7 @@
 //---------------------------------------------------------------------------
 typedef pcl::PointXYZ PointT;
 #define POINT_THRESHOLD (10)
-#define MAX_CONSECUTIVE_ERRORS (30)
+#define MAX_CONSECUTIVE_ERRORS (10)
 
 //---------------------------------------------------------------------------
 // Objects and Functions

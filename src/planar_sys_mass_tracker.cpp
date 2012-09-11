@@ -39,7 +39,7 @@
 //---------------------------------------------------------------------------
 typedef pcl::PointXYZ PointT;
 #define POINT_THRESHOLD (5)
-#define MAX_CONSECUTIVE_ERRORS (30)
+#define MAX_CONSECUTIVE_ERRORS (10)
 
 //---------------------------------------------------------------------------
 // Objects and Functions
@@ -127,6 +127,14 @@ public:
 		pt.x = 0; pt.y = 0; pt.z = 0;
 		pt.error = true;
 		error_count++;
+	    }
+
+	    
+	    if (error_count > MAX_CONSECUTIVE_ERRORS)
+	    {
+		ros::param::set("/operating_condition", 4);
+		ROS_ERROR("Lost robot too many times!");
+		ros::shutdown();
 	    }
 	    // finally publish the results:
 	    mass_pub.publish(pt);
