@@ -87,7 +87,7 @@ public:
 	    }
 
 	    // set a parameter telling the world that I am tracking the robots
-	    ros::param::set("/tracking_robot", true);
+	    ros::param::set("tracking_robot", true);
 	    error_count = 0;
 	    
 	    return;
