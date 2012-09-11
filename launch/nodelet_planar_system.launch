@@ -5,8 +5,13 @@
   <!-- launch the nodelet manager -->
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen"/>  
 
-  <!-- tracker node and static frame broadcaster -->
-  <include file="$(find objecttracker_nu)/launch/multi_robot_tracking.launch"/>
+  <!-- tracker nodes and static frame broadcaster -->
+  <node pkg="objecttracker_nu" type="planar_sys_robot_tracker"
+  	name="robot_tracking_node" output="screen" />
+  <node pkg="objecttracker_nu" type="planar_sys_mass_tracker"
+  	name="mass_tracking_node" output="screen" />
+  <include file="$(find objecttracker_nu)/launch/optimization_frame_broadcaster.launch"/>
+
 
   <!-- voxel downsampling, and transformation -->
   <group ns="/cloud_downsampler">
@@ -24,8 +29,8 @@
   </group>
   
 
-  <!-- pass-through filtering -->  
-  <group ns="/box_filter">
+  <!-- pass-through filtering for the robot:-->  
+  <group ns="/robot_box_filter">
     <!-- Run a passthrough filter to delimit in x direction -->
     <node pkg="nodelet" type="nodelet" name="psx" args="load pcl/PassThrough /pcl_manager" output="screen">
       <remap from="~input" to="/cloud_downsampler/voxel/output" />
@@ -42,6 +47,37 @@
         filter_field_name: y
         filter_limit_min: 0.0
         filter_limit_max: 1.0
+      </rosparam>
+    </node>
+    <!-- Run a passthrough filter to delimit in z direction -->
+    <node pkg="nodelet" type="nodelet" name="psz" args="load pcl/PassThrough /pcl_manager" output="screen">
+      <remap from="~input" to="psy/output" />
+      <rosparam>
+        filter_field_name: z
+        filter_limit_min: 0.0
+        filter_limit_max: 2.5
+      </rosparam>
+    </node>
+  </group>
+
+  <!-- pass-through filtering for the mass:-->  
+  <group ns="/mass_box_filter">
+    <!-- Run a passthrough filter to delimit in x direction -->
+    <node pkg="nodelet" type="nodelet" name="psx" args="load pcl/PassThrough /pcl_manager" output="screen">
+      <remap from="~input" to="/cloud_downsampler/voxel/output" />
+      <rosparam>
+        filter_field_name: x
+        filter_limit_min: -1.0
+        filter_limit_max: 1.0
+      </rosparam>
+    </node>
+    <!-- Run a passthrough filter to delimit in y direction -->
+    <node pkg="nodelet" type="nodelet" name="psy" args="load pcl/PassThrough /pcl_manager" output="screen">
+      <remap from="~input" to="psx/output" />
+      <rosparam>
+        filter_field_name: y
+        filter_limit_min: -1.45
+        filter_limit_max: -0.1
       </rosparam>
     </node>
     <!-- Run a passthrough filter to delimit in z direction -->

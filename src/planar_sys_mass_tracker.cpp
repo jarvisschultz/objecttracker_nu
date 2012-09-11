@@ -1,21 +1,18 @@
 // Jarvis Schultz
-// September 13, 2011
+// September 2012
 
 //---------------------------------------------------------------------------
 // Notes
 // ---------------------------------------------------------------------------
-// This is a new node for tracking a suspended object.  It is very
-// similar to nu_objecttracker.cpp.  It should be launched with a
-// launch file just like in robot_tracker.cpp.  
+// This node is for tracking a the suspended mass robot using the
+// nodelet launch files to downsample, transform, and pass-through
+// filter the PC's.  I am originally using it to send on to the
+// planar_coordinator node for filtering and controlling the
+// closed-loop planar mass system.
 
-//---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Includes
-//---------------------------------------------------------------------------
-
-#include <boost/thread/thread.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/condition.hpp>
-
+// ---------------------------------------------------------------------------
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -26,85 +23,57 @@
 #include <tf/transform_listener.h>
 #include <tf/transform_datatypes.h>
 #include <puppeteer_msgs/PointPlus.h>
-#include <puppeteer_msgs/speed_command.h>
+#include <puppeteer_msgs/Robots.h>
 #include <geometry_msgs/Point.h>
 
-#include <pcl/io/pcd_io.h>
-#include <pcl/point_types.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/features/feature.h>
-#include <pcl/filters/statistical_outlier_removal.h>
-#include <pcl/filters/extract_indices.h>
-#include <pcl/sample_consensus/method_types.h>
-#include <pcl/sample_consensus/model_types.h>
-#include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/features/normal_3d.h>
+// PCL stuff:
 #include <pcl/pcl_base.h>
 #include <pcl_ros/point_cloud.h>
-#include <pcl_ros/transforms.h>
-
+#include <pcl_ros/transforms.h> 
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
+
 
 //---------------------------------------------------------------------------
 // Global Variables
 //---------------------------------------------------------------------------
-#define POINT_THRESHOLD (5)
 typedef pcl::PointXYZ PointT;
-std::string filename;
+#define POINT_THRESHOLD (5)
+#define MAX_CONSECUTIVE_ERRORS (30)
 
 //---------------------------------------------------------------------------
 // Objects and Functions
 //---------------------------------------------------------------------------
 
-class ObjectTracker
+class MassTracker
 {
 
 private:
     ros::NodeHandle n_;
     ros::Subscriber cloud_sub;
-    ros::Publisher cloud_pub[2];
-    ros::Publisher pointplus_pub;
-    float xpos_last, xpos_lastlast;
-    float ypos_last, ypos_lastlast;
-    float zpos_last, zpos_lastlast;
-    bool locate;
-    puppeteer_msgs::speed_command srv;
-    Eigen::Affine3f const_transform;
+    ros::Publisher mass_pub;
     tf::Transform tf;
-    ros::Time t_now_timer, t_last_timer;
-    float dt_timer;
-    Eigen::VectorXf frame_limits;
+    unsigned int error_count;
 
 public:
-    ObjectTracker()
+    MassTracker()
 	{
-	    // get filter limits:
-	    get_frame_limits(filename);
-
-	    cloud_sub = n_.subscribe("/camera/depth/points", 1,
-				     &ObjectTracker::cloudcb, this);
-	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus>
-		("object1_position", 100);
-	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2>
-		("object1_cloud", 1);
-	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2>
-		("object1_filtered_cloud", 1);
-  
-	    xpos_last = 0.0;
-	    ypos_last = 0.0;
-	    zpos_last = 0.0;
-
-	    locate = true;
+	    ROS_DEBUG("Creating subscribers and publishers");
+	    // all publishers and subscribers:
+	    cloud_sub = n_.subscribe("mass_box_filter/psz/output", 10,
+	    			     &MassTracker::cloudcb, this);
+	    mass_pub = n_.advertise<puppeteer_msgs::PointPlus>
+	    	("object1_position", 100);
+	    
 	    tf::StampedTransform t;
 	    tf::TransformListener listener;
 
+	    ROS_DEBUG("Looking up transform from kinect to optimization frame");
 	    try
 	    {
 		ros::Time now=ros::Time::now();
 		listener.waitForTransform("/camera_depth_optical_frame",
-					 "/oriented_optimization_frame",
+					  "/oriented_optimization_frame",
 					  now, ros::Duration(1.0));
 		listener.lookupTransform("/oriented_optimization_frame",
 					 "/camera_depth_optical_frame",
@@ -118,241 +87,51 @@ public:
 		ros::shutdown();
 	    }
 
-	    t_now_timer = ros::Time::now();
-	    dt_timer = 0.0;
+	    // set a parameter telling the world that I am tracking the robots
+	    ros::param::set("/tracking_mass", true);
+	    error_count = 0;
+	    
+	    return;
 	}
 
     // this function gets called every time new pcl data comes in
     void cloudcb(const sensor_msgs::PointCloud2ConstPtr &scan)
 	{
-	    static unsigned int found_flag = 0;
-	    Eigen::Vector4f centroid;
-	    float xpos = 0.0;
-	    float ypos = 0.0;
-	    float zpos = 0.0;
-	    float D_sphere = 0.05; //meters
-	    float R_search = 2.0*D_sphere;
-	    puppeteer_msgs::PointPlus pointplus;
-	    geometry_msgs::Point point;
-	    pcl::PassThrough<pcl::PointXYZ> pass;
-	    Eigen::VectorXf lims(6);
+	    ROS_DEBUG("Filtered and downsampled cloud receieved in robot tracker");
 
-	    sensor_msgs::PointCloud2::Ptr
-		robot_cloud (new sensor_msgs::PointCloud2 ()),
-		robot_cloud_filtered (new sensor_msgs::PointCloud2 ());    
-
+	    Eigen::Vector4f cent;
+	    puppeteer_msgs::PointPlus pt;
 	    pcl::PointCloud<pcl::PointXYZ>::Ptr
-		cloud (new pcl::PointCloud<pcl::PointXYZ> ()),
-		cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
-
-	    // set a parameter telling the world that I am tracking the mass
-	    ros::param::set("/tracking_mass", true);
-
-	    // New sensor message for holding the transformed data
-	    sensor_msgs::PointCloud2::Ptr scan_transformed
-		(new sensor_msgs::PointCloud2());
-	    try{
-		pcl_ros::transformPointCloud("/oriented_optimization_frame",
-					     tf, *scan, *scan_transformed);
-	    }
-	    catch(tf::TransformException ex)
-	    {
-		ROS_ERROR("%s", ex.what());
-	    }
-	    scan_transformed->header.frame_id = "/oriented_optimization_frame";
+		cloud (new pcl::PointCloud<pcl::PointXYZ>);
 
 	    // Convert to pcl
-	    pcl::fromROSMsg(*scan_transformed, *cloud);
+	    ROS_DEBUG("Convert incoming cloud to pcl cloud");
+	    pcl::fromROSMsg(*scan, *cloud);
 
-	    // set time stamp and frame id
-	    pointplus.header.stamp = scan->header.stamp;
-	    pointplus.header.frame_id = "/oriented_optimization_frame";
-
-	    // do we need to find the object?
-	    if (locate == true)
+	    // now we can find the cent, and determine if we have
+	    // an error.  If we do, we can pass that along to the
+	    // coordinator node.
+	    pt.header.frame_id = scan->header.frame_id;
+	    pt.header.stamp = scan->header.stamp;
+	    if (cloud->points.size() > POINT_THRESHOLD)
 	    {
-		found_flag = 0;
-	    	lims << frame_limits;
-	    	pass_through(cloud, cloud_filtered, lims);
-		
-	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
-	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
-
-	    	// Publish cloud:
-	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud_filtered);
-	    	robot_cloud_filtered->header.frame_id =
-		    "/oriented_optimization_frame";
-	    	cloud_pub[1].publish(robot_cloud_filtered);
-		
-	    	// are there enough points in the point cloud?
-	    	if(cloud_filtered->points.size() > POINT_THRESHOLD)
-	    	{
-		    found_flag++;
-	    	    locate = false;  // We have re-found the object!
-
-	    	    // set values to publish
-	    	    pointplus.x = xpos; pointplus.y = ypos; pointplus.z = zpos;
-	    	    pointplus.error = false;
-	    	    pointplus_pub.publish(pointplus);
-	    	}
-	    	// otherwise we should publish a blank centroid
-	    	// position with an error flag
-	    	else
-	    	{
-	    	    // set values to publish
-	    	    pointplus.x = 0.0;
-	    	    pointplus.y = 0.0;
-	    	    pointplus.z = 0.0;
-	    	    pointplus.error = true;
-
-	    	    pointplus_pub.publish(pointplus);	    
-	    	}
+		pcl::compute3DCentroid(*cloud, cent);
+		// then we have successfully found the cent of a
+		// valid cloud:
+		pt.x = cent(0); pt.y = cent(1); pt.z = cent(2);
+		pt.error = false;
+		error_count = 0;
 	    }
-	    // if "else", we are just going to calculate the centroid
-	    // of the input cloud
 	    else
 	    {
-		if (found_flag == 1)
-		{
-		    lims <<
-			xpos_last-R_search, xpos_last+R_search,
-			ypos_last-R_search, ypos_last+R_search,
-			zpos_last-R_search, zpos_last+R_search;
-		    found_flag++;		       
-		}
-		else
-		{
-		    // calculate velocities:
-		    dt_timer = (t_now_timer.toSec()-t_last_timer.toSec());
-		    ROS_DEBUG("dt_timer: %f", dt_timer);
-
-		    float xdot = (xpos_last-xpos_lastlast)/dt_timer;
-		    float ydot = (ypos_last-ypos_lastlast)/dt_timer;
-		    float zdot = (zpos_last-zpos_lastlast)/dt_timer;
-		    float dt = ((ros::Time::now()).toSec()-t_now_timer.toSec());
-		    
-		    float xsearch = xpos_last + xdot*dt;
-		    float ysearch = ypos_last + ydot*dt;
-		    float zsearch = zpos_last + zdot*dt;
-
-		    lims <<
-			xsearch-R_search, xsearch+R_search,
-			ysearch-R_search, ysearch+R_search,
-			zsearch-R_search, zsearch+R_search;
-		}
-
-		pass_through(cloud, cloud_filtered, lims);
-		
-	    	// are there enough points in the point cloud?
-	    	if(cloud_filtered->points.size() < POINT_THRESHOLD)
-	    	{
-	    	    locate = true;
-	    	    ROS_WARN("Lost Object at: x = %f  y = %f  z = %f\n",
-	    		     xpos_last,ypos_last,zpos_last);
-	  
-	    	    pointplus.x = 0.0;
-	    	    pointplus.y = 0.0;
-	    	    pointplus.z = 0.0;
-	    	    pointplus.error = true;
-
-	    	    pointplus_pub.publish(pointplus);
-		    	  	  
-	    	    return;
-	    	}
-	
-	    	pcl::compute3DCentroid(*cloud_filtered, centroid);
-	    	xpos = centroid(0); ypos = centroid(1); zpos = centroid(2);
-
-	    	pcl::toROSMsg(*cloud_filtered, *robot_cloud);
-	    	robot_cloud_filtered->header.frame_id =
-		    "/oriented_optimization_frame";
-	    	cloud_pub[0].publish(robot_cloud);
-
-	    	tf::Transform transform;
-	    	transform.setOrigin(tf::Vector3(xpos, ypos, zpos));
-	    	transform.setRotation(tf::Quaternion(0, 0, 0, 1));
-
-	    	static tf::TransformBroadcaster br;
-	    	br.sendTransform(tf::StampedTransform
-	    			 (transform,ros::Time::now(),
-	    			  "/oriented_optimization_frame",
-				  "/object_kinect_frame"));
-
-	    	// set pointplus message values and publish
-	    	pointplus.x = xpos;
-	    	pointplus.y = ypos;
-	    	pointplus.z = zpos;
-	    	pointplus.error = false;
-
-	    	pointplus_pub.publish(pointplus);
+		pt.x = 0; pt.y = 0; pt.z = 0;
+		pt.error = true;
+		error_count++;
 	    }
-
-	    t_last_timer = t_now_timer;
-	    t_now_timer = ros::Time::now();
-	    xpos_lastlast = xpos_last;
-	    ypos_lastlast = ypos_last;
-	    zpos_lastlast = zpos_last;
-	    xpos_last = xpos;
-	    ypos_last = ypos;
-	    zpos_last = zpos;
+	    // finally publish the results:
+	    mass_pub.publish(pt);
 	}
-
-    void pass_through(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
-		      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out,
-		      const Eigen::VectorXf lims)
-	{
-	    pcl::PointCloud<pcl::PointXYZ>::Ptr
-		cloud_filtered_x (new pcl::PointCloud<pcl::PointXYZ> ()),
-		cloud_filtered_y (new pcl::PointCloud<pcl::PointXYZ> ());
-	    pcl::PassThrough<pcl::PointXYZ> pass;
-
-	    if(lims.size() != 6)
-	    {
-		ROS_WARN("Limits for pass-through wrong size!");
-		return;
-	    }
-
-	    pass.setInputCloud(cloud_in);
-	    pass.setFilterFieldName("x");
-	    pass.setFilterLimits(lims(0), lims(1));
-	    pass.filter(*cloud_filtered_x);
-	    
-	    pass.setInputCloud(cloud_filtered_x);
-	    pass.setFilterFieldName("y");
-	    pass.setFilterLimits(lims(2), lims(3));
-	    pass.filter(*cloud_filtered_y);
-	    
-	    pass.setInputCloud(cloud_filtered_y);
-	    pass.setFilterFieldName("z");
-	    pass.setFilterLimits(lims(4), lims(5));
-	    pass.filter(*cloud_out);
-
-	    return;
-	}
-
-
-    void get_frame_limits(std::string f)
-	{
-	    // first define the size of of the limits vector:
-	    frame_limits.resize(6);
-
-	    // open the file
-	    std::ifstream file;
-	    std::string line;
-	    float tmp;
-	    file.open(f.c_str(), std::fstream::in);
-	    for (int i=0; i<6; i++)
-	    {
-		getline(file, line);
-		tmp = atof(line.c_str());
-		frame_limits(i) = tmp;
-	    }
-	    file.close();
-
-	    return;
-	}
-		        
-};
+}; // End of MassTracker class
 
 
 //---------------------------------------------------------------------------
@@ -361,19 +140,18 @@ public:
 
 int main(int argc, char **argv)
 {
-    // get the filename:
-    std::string working_dir;
-    working_dir = argv[0];
-    std::size_t found = working_dir.find("bin");
-    std::string tmp_dir = working_dir.substr(0, found);
-    working_dir = tmp_dir+"launch/";
-    filename = working_dir+"frame_limits.txt";
+    ros::init(argc, argv, "planar_mass_tracker");
 
-    ros::init(argc, argv, "object_tracker");
+    // turn on debugging
+    // log4cxx::LoggerPtr my_logger =
+    // log4cxx::Logger::getLogger(ROSCONSOLE_DEFAULT_NAME);
+    // my_logger->setLevel(
+    // ros::console::g_level_lookup[ros::console::levels::Debug]);
+
     ros::NodeHandle n;
 
-    ROS_INFO("Starting Object Tracker...\n");
-    ObjectTracker tracker;
+    ROS_INFO("Starting planar mass tracker...\n");
+    MassTracker tracker;
   
     ros::spin();
   
