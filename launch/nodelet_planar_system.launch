@@ -1,4 +1,6 @@
 <launch>
+  <arg name="input" default="points" />
+
   <!-- launch the kinect -->
   <include file="$(find openni_launch)/launch/openni.launch"/>
 
@@ -16,7 +18,7 @@
   <!-- voxel downsampling, and transformation -->
   <group ns="/cloud_downsampler">
     <node pkg="nodelet" type="nodelet" name="voxel" args="load pcl/VoxelGrid /pcl_manager" output="screen">  
-      <remap from="~input" to="/camera/depth/points" />
+      <remap from="~input" to="/camera/depth/$(arg input)" />
       <rosparam>
         filter_field_name: z
         filter_limit_min: -3.0
