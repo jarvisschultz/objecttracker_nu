@@ -127,7 +127,14 @@ public:
 	    // Inliers has indices in cloud_in belonging to plane,
 	    // coefficients has plane eqn coeffs i.e. ax+by+cz+d=0
 	    ROS_DEBUG("About to segment planar model");
-	    seg.segment (*inliers, *coefficients);
+	    if (cloud_in->points.size() > 100)
+		seg.segment (*inliers, *coefficients);
+	    else
+	    {
+		ROS_WARN_THROTTLE(1, "Cannot find a plane!");
+		mean_normal << -1.0,-1.0,-1.0;
+		return(mean_normal);
+	    }
 
 	    ROS_DEBUG("Extracting new cloud");
 	    extract.setInputCloud(cloud_in);
@@ -143,16 +150,16 @@ public:
 	    ROS_DEBUG("Setting up normal estimation parameters");
 	    // Create a KD-Tree
 	    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree
-		(new pcl::search::KdTree<pcl::PointXYZ>);
+	    	(new pcl::search::KdTree<pcl::PointXYZ>);
 	    tree->setInputCloud (cloud_out);
 	    // Now, let's estimate the normals of this cloud:
 	    pcl::PointCloud<pcl::PointXYZ> mls_points;
 	    pcl::MovingLeastSquares<pcl::PointXYZ, pcl::Normal> mls;
-	    pcl::PointCloud<pcl::Normal>::Ptr mls_normals
-		(new pcl::PointCloud<pcl::Normal> ());
-	    mls.setOutputNormals (mls_normals);
+	    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals
+	    	(new pcl::PointCloud<pcl::Normal> ());
 
 	    // Set sampling parameters
+	    mls.setOutputNormals (cloud_normals);
 	    mls.setInputCloud (cloud_out);
 	    mls.setPolynomialFit (true);
 	    mls.setSearchMethod (tree);
@@ -161,24 +168,44 @@ public:
 	    ROS_DEBUG("Finding normals");
 	    // Filter:
 	    mls.reconstruct(mls_points);
-
+	    
 	    ROS_DEBUG("Finding mean value");
 	    // Now, let's find the mean normal value:
 	    float avgnormal[3] = {0.0,0.0,0.0};
 	    float avgcounts[3] = {0.0,0.0,0.0};
-	    for(int i=0; i < (int) mls_normals->points.size(); i++)
+	    for(int i=0; i < (int) cloud_normals->points.size(); i++)
 	    {
-		if (mls_normals->points.at(i).normal[2] > 0)
+		if (cloud_normals->points.at(i).normal[2] > 0)
 		    for(int j=0; j<3; j++)
-			if(!std::isnan(mls_normals->points.at(i).normal[j]))
+		    {
+			if(!std::isnan(cloud_normals->points.at(i).normal[j]))
 			{
-			    avgnormal[j] += mls_normals->points.at(i).normal[j];
+			    avgnormal[j] += cloud_normals->points.at(i).normal[j];
 			    avgcounts[j] += 1.0;
 			}
+		    }
+		else
+		    for(int j=0; j<3; j++)
+		    {
+			if(!std::isnan(cloud_normals->points.at(i).normal[j]))
+			{
+			    avgnormal[j] -= cloud_normals->points.at(i).normal[j];
+			    avgcounts[j] += 1.0;
+			}
+		    }
 	    }
 
 	    for(int j=0; j<3; j++)
 		avgnormal[j] /= avgcounts[j];
+	    for(int j=0; j<3; j++)
+	    {
+	    	if (std::isnan(avgnormal[j])) // || fabs(avgnormal[2]-1) < 0.0001)
+	    	{
+	    	    ROS_WARN_THROTTLE(5, "Bad normal detected");
+	    	    mean_normal << -1.0,-1.0,-1.0;
+	    	    return(mean_normal);
+	    	}
+	    }
 	    call_count++;
 	    printf("Num = %3d     ", call_count);
 	    std::cout <<
@@ -373,6 +400,13 @@ public:
 	    {
 		ROS_DEBUG("Calling planar_inliers for the %d time",call_count+1);
 		current_normal = planar_inliers(cloud_filtered_z, planar_cloud);
+		if (fabs(current_normal[0]+1) < 0.0001 &&
+		    fabs(current_normal[1]+1) < 0.0001 &&
+		    fabs(current_normal[2]+1) < 0.0001 )
+		{
+		    ROS_DEBUG("Received a bad set of normals!");
+		    return;
+		}		    
 		ROS_DEBUG("Incrementing counts and adding vectors");
 		call_count++;
 		count_normal += current_normal;
@@ -484,11 +518,6 @@ public:
 		 << "name=\"optimization_frame_broadcaster\"\n";
 
 	    // get the rotation matrix into a quaternion
-	    // tf::StampedTransform t;
-	    // tf::TransformListener listener;
-	    // listener.lookupTransform ( "camera_depth_optical_frame",
-	    // 			  "oriented_optimization_frame",
-	    // 			  ros::Time::now(), t);
 	    Eigen::Quaternion<float> q;
 	    q = Eigen::Quaternionf(Rot);
 	    file << "args=\"" << orig(0) << " "
@@ -497,7 +526,7 @@ public:
 		 << q.z() << " " << q.w() << " "
 		 << "camera_depth_optical_frame "
 		 << "oriented_optimization_frame "
-		 << "100" << "\" />" << "\n" << "</launch>";	    	    
+		 << "100" << "\" />" << "\n" << "</launch>\r\n";	    	    
 
 	    ROS_DEBUG("Killing node");
 	    file.close();
