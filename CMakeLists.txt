@@ -40,3 +40,6 @@ rosbuild_add_executable(system_calibrator src/orientation_calibration.cpp)
 rosbuild_add_executable(multi_robot_tracker src/multi_robot_tracker.cpp)
 rosbuild_add_executable(planar_sys_robot_tracker src/planar_sys_robot_tracker.cpp)
 rosbuild_add_executable(planar_sys_mass_tracker src/planar_sys_mass_tracker.cpp)
+
+#find_library(LOG4CXX_LIBRARY log4cxx)
+#target_link_libraries(multi_robot_tracker ${LOG4CXX_LIBRARY})

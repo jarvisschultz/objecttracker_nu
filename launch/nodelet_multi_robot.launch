@@ -31,8 +31,8 @@
       <remap from="~input" to="/cloud_downsampler/voxel/output" />
       <rosparam>
         filter_field_name: x
-        filter_limit_min: -1.0
-        filter_limit_max: 1.0
+        filter_limit_min: -1.1
+        filter_limit_max: 1.1
       </rosparam>
     </node>
     <!-- Run a passthrough filter to delimit in y direction -->
@@ -40,7 +40,7 @@
       <remap from="~input" to="psx/output" />
       <rosparam>
         filter_field_name: y
-        filter_limit_min: 0.1
+        filter_limit_min: -0.05
         filter_limit_max: 1.0
       </rosparam>
     </node>
@@ -50,7 +50,7 @@
       <rosparam>
         filter_field_name: z
         filter_limit_min: 0.0
-        filter_limit_max: 2.5
+        filter_limit_max: 3.25
       </rosparam>
     </node>
   </group>

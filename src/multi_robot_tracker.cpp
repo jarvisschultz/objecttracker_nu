@@ -54,7 +54,7 @@
 //---------------------------------------------------------------------------
 // Global Variables
 //---------------------------------------------------------------------------
-#define MAX_CLUSTERS 4
+#define MAX_CLUSTERS 9
 typedef pcl::PointXYZ PointT;
 std::string filename;
 
@@ -164,7 +164,13 @@ public:
 	    // build a KdTree object for the search method of the extraction
 	    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree
 	    	(new pcl::search::KdTree<pcl::PointXYZ> ());
-	    tree->setInputCloud (cloud);
+	    if (cloud->points.size() > 0)
+		tree->setInputCloud (cloud);
+	    else
+	    {
+		ROS_WARN_THROTTLE(1, "No points in cloud, could not init KdTree.");
+		return;
+	    }
 	    ROS_DEBUG("done with KdTree initialization : %f",
 		      (ros::Time::now()-tcur).toSec());
 	    tcur = ros::Time::now();
@@ -355,7 +361,7 @@ int main(int argc, char **argv)
         
     ros::init(argc, argv, "multi_robot_tracker");
 
-    // turn on debugging
+    // // turn on debugging
     // log4cxx::LoggerPtr my_logger =
     // log4cxx::Logger::getLogger(ROSCONSOLE_DEFAULT_NAME);
     // my_logger->setLevel(
