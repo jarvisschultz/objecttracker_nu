@@ -180,7 +180,7 @@ public:
 
 	    // setup extraction:
 	    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-	    ec.setClusterTolerance (0.02); // cm
+	    ec.setClusterTolerance (0.04); // cm
 	    ec.setMinClusterSize (50);
 	    ec.setMaxClusterSize (3000);
 	    ec.setSearchMethod (tree);
