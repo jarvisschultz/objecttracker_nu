@@ -3,7 +3,8 @@
   <arg if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args"/>
   <arg unless="$(arg debug)" name="launch_prefix" value=""/>
   <node pkg="objecttracker_nu" type="multi_robot_tracker"
-  	name="robot_tracking_node" output="screen" launch-prefix="$(arg launch_prefix)">
+  	name="robot_tracking_node" output="screen" 
+	launch-prefix="$(arg launch_prefix)" respawn="true" >
   </node>
   <include file="$(find objecttracker_nu)/launch/optimization_frame_broadcaster.launch"/>
 </launch>
