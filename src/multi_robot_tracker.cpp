@@ -181,8 +181,8 @@ public:
 	    // setup extraction:
 	    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
 	    ec.setClusterTolerance (0.04); // cm
-	    ec.setMinClusterSize (50);
-	    ec.setMaxClusterSize (3000);
+	    ec.setMinClusterSize (25);
+	    ec.setMaxClusterSize (1500);
 	    ec.setSearchMethod (tree);
 	    ec.setInputCloud (cloud);
 	    // perform cluster extraction
@@ -248,11 +248,14 @@ public:
 			 "than the number of robots");
 		// pop minimum cluster count
 		remove_least_likely(&robots, &num);
+		// for (unsigned int j=0; j < num.size(); j++)
+		//     printf("Cluster number %d with %d points\r\n",j+1,num[j]);
+		assert(num.size() == robots.robots.size());
 	    }
 	    
 	    robots.header.stamp = tstamp;
 	    robots.header.frame_id = "/oriented_optimization_frame";
-	    robots.number = number_clusters;
+	    robots.number = num.size();
 
 	    robots_pub.publish(robots);
 
