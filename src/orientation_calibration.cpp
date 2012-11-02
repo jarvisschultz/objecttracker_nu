@@ -46,6 +46,7 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/surface/mls.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/common/vector_average.h>
 
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/point_cloud_conversion.h>
@@ -58,6 +59,8 @@
 #define POINT_THRESHOLD (5)
 typedef pcl::PointXYZ PointT;
 std::string working_dir;
+#define ANGLE_THRESHOLD (10) // degrees
+
 
 //---------------------------------------------------------------------------
 // Objects and Functions
@@ -85,10 +88,10 @@ public:
     ObjectTracker()
 	{
 	    cloud_sub = n_.subscribe("/camera/depth/points", 1, &ObjectTracker::cloudcb, this);
-	    point_pub = n_.advertise<geometry_msgs::Point> ("object1_position_2", 100);
-	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("object1_position", 100);
-	    point_pub2 = n_.advertise<geometry_msgs::Point> ("object2_position_2", 100);
-	    pointplus_pub2 = n_.advertise<puppeteer_msgs::PointPlus> ("object2_position", 100);
+	    point_pub = n_.advertise<geometry_msgs::Point> ("object1_position_2", 1);
+	    pointplus_pub = n_.advertise<puppeteer_msgs::PointPlus> ("object1_position", 1);
+	    point_pub2 = n_.advertise<geometry_msgs::Point> ("object2_position_2", 1);
+	    pointplus_pub2 = n_.advertise<puppeteer_msgs::PointPlus> ("object2_position", 1);
 	    cloud_pub[0] = n_.advertise<sensor_msgs::PointCloud2> ("object1_cloud", 1);
 	    cloud_pub[1] = n_.advertise<sensor_msgs::PointCloud2> ("object2_cloud", 1);
 	    cloud_pub[2] = n_.advertise<sensor_msgs::PointCloud2> ("filtered_cloud", 1);
@@ -131,7 +134,8 @@ public:
 		seg.segment (*inliers, *coefficients);
 	    else
 	    {
-		ROS_WARN_THROTTLE(1, "Cannot find a plane!");
+		ROS_WARN_THROTTLE(1, "Not enough points in input cloud "\
+				  "for planar extraction");
 		mean_normal << -1.0,-1.0,-1.0;
 		return(mean_normal);
 	    }
@@ -142,16 +146,48 @@ public:
 	    extract.setNegative(false);
 	    extract.filter(*cloud_out);
 
+	    if (cloud_out->points.size() < 1000)
+	    {
+		ROS_WARN_THROTTLE(1, "Planar inlier cloud not"\
+				  " sufficiently planar");
+		mean_normal << -1.0,-1.0,-1.0;
+		return(mean_normal);
+	    }
+
+
 	    ROS_DEBUG("Publishing new point cloud");
 	    // Now, we can publish the cloud:
 	    pcl::toROSMsg(*cloud_out, *filtered_cloud);
 	    cloud_pub[2].publish(filtered_cloud);
 
+	    // Now, let's chop off the 10% at the edges of all three directions
+	    pcl::PointCloud<pcl::PointXYZ>::Ptr
+		chopped_cloud(new pcl::PointCloud<pcl::PointXYZ> ());
+	    Eigen::Vector4f min_p, max_p;
+	    // std::cout << "Getting min and max" << std::endl;
+	    pcl::getMinMax3D(*cloud_out, min_p, max_p);
+	    // std::cout << "min\r\n" << min_p << std::endl;
+	    // std::cout << "max\r\n" << max_p << std::endl;
+	    Eigen::VectorXf lims(6);
+	    lims <<
+		0.9*min_p(0), 0.9*max_p(0),
+		0.9*min_p(1), 0.9*max_p(1),
+		min_p(2), max_p(2);
+	    // std::cout << "lims = \r\n" << lims << std::endl;
+	    pass_through(cloud_out, chopped_cloud, lims);
+	    	    
 	    ROS_DEBUG("Setting up normal estimation parameters");
 	    // Create a KD-Tree
 	    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree
-	    	(new pcl::search::KdTree<pcl::PointXYZ>);
-	    tree->setInputCloud (cloud_out);
+		(new pcl::search::KdTree<pcl::PointXYZ>);
+	    if (chopped_cloud->points.size() > 0)
+		tree->setInputCloud (chopped_cloud);
+	    else
+	    {
+		ROS_WARN("KdTree input empty, cannot initialize");
+		mean_normal << -1.0,-1.0,-1.0;
+		return(mean_normal);
+	    }
 	    // Now, let's estimate the normals of this cloud:
 	    pcl::PointCloud<pcl::PointXYZ> mls_points;
 	    pcl::MovingLeastSquares<pcl::PointXYZ, pcl::Normal> mls;
@@ -160,10 +196,10 @@ public:
 
 	    // Set sampling parameters
 	    mls.setOutputNormals (cloud_normals);
-	    mls.setInputCloud (cloud_out);
+	    mls.setInputCloud (chopped_cloud);
 	    mls.setPolynomialFit (true);
 	    mls.setSearchMethod (tree);
-	    mls.setSearchRadius (0.03);
+	    mls.setSearchRadius (0.05);
 
 	    ROS_DEBUG("Finding normals");
 	    // Filter:
@@ -171,50 +207,74 @@ public:
 	    
 	    ROS_DEBUG("Finding mean value");
 	    // Now, let's find the mean normal value:
-	    float avgnormal[3] = {0.0,0.0,0.0};
-	    float avgcounts[3] = {0.0,0.0,0.0};
+
+	    pcl::VectorAverage3f vavg;
 	    for(int i=0; i < (int) cloud_normals->points.size(); i++)
 	    {
 		if (cloud_normals->points.at(i).normal[2] > 0)
-		    for(int j=0; j<3; j++)
-		    {
-			if(!std::isnan(cloud_normals->points.at(i).normal[j]))
-			{
-			    avgnormal[j] += cloud_normals->points.at(i).normal[j];
-			    avgcounts[j] += 1.0;
-			}
-		    }
+		{
+		    Eigen::Map<Eigen::Vector3f>
+				 tmp(cloud_normals->points.at(i).normal);
+		    vavg.add(tmp);
+		}
 		else
-		    for(int j=0; j<3; j++)
-		    {
-			if(!std::isnan(cloud_normals->points.at(i).normal[j]))
-			{
-			    avgnormal[j] -= cloud_normals->points.at(i).normal[j];
-			    avgcounts[j] += 1.0;
-			}
-		    }
-	    }
-
-	    for(int j=0; j<3; j++)
-		avgnormal[j] /= avgcounts[j];
-	    for(int j=0; j<3; j++)
-	    {
-	    	if (std::isnan(avgnormal[j])) // || fabs(avgnormal[2]-1) < 0.0001)
-	    	{
-	    	    ROS_WARN_THROTTLE(5, "Bad normal detected");
-	    	    mean_normal << -1.0,-1.0,-1.0;
-	    	    return(mean_normal);
-	    	}
+		{
+		    Eigen::Map<Eigen::Vector3f>
+				 tmp(cloud_normals->points.at(i).normal);
+		    vavg.add(-1.0*tmp);
+		}
 	    }
 	    call_count++;
+	    Eigen::Matrix<float, 3, 1> avgorig;
+	    avgorig = vavg.getMean();
+
+	    // now let's remove the outliers:
+	    pcl::VectorAverage3f vavg_new;
+	    for(int i=0; i < (int) cloud_normals->points.size(); i++)
+	    {
+		if (cloud_normals->points.at(i).normal[2] > 0)
+		{
+		    Eigen::Map<Eigen::Vector3f>
+				 tmp(cloud_normals->points.at(i).normal);
+		    // is the angle between this and the original average less
+		    // than a threshold?
+		    float dp = tmp.adjoint()*avgorig;
+		    if (180.0*acosf(dp)/M_PI < ANGLE_THRESHOLD)
+			vavg_new.add(tmp);
+		    // std::cout << "avg = " << avgorig.transpose() << std::endl;
+		    // std::cout << "tmp = " << tmp.transpose() << std::endl;
+		    // std::cout << "angle = " << 180.0*acosf(dp)/M_PI << std::endl;
+		}
+		else
+		{
+		    Eigen::Map<Eigen::Vector3f>
+				 tmp(cloud_normals->points.at(i).normal);
+		    // is the angle between this and the original average less
+		    // than a threshold?
+		    tmp *= -1.0;
+		    float dp = tmp.adjoint()*avgorig;
+		    if (180.0*acosf(dp)/M_PI < ANGLE_THRESHOLD)
+			vavg_new.add(tmp);
+		    // std::cout << "avg = " << avgorig.transpose() << std::endl;
+		    // std::cout << "tmp = " << tmp.transpose() << std::endl;
+		    // std::cout << "angle = " << 180.0*acosf(dp)/M_PI << std::endl;
+		}
+	    }
+
 	    printf("Num = %3d     ", call_count);
+	    Eigen::Matrix<float, 3, 1> avg;
+	    avg = vavg_new.getMean();	    
 	    std::cout <<
-		"X Normal = " << avgnormal[0] << "\t" <<
-		"Y Normal = " << avgnormal[1] << "\t" << 
-		"Z Normal = " << avgnormal[2] << "\n";
+	    	"X Normal = " << avg(0) << "\t" <<
+	    	"Y Normal = " << avg(1) << "\t" << 
+	    	"Z Normal = " << avg(2) << "\n";
+	    std::cout << "Removed "
+		      << vavg.getNoOfSamples() - vavg_new.getNoOfSamples()
+		      << " outlier samples from the normal list of length "
+		      << vavg.getNoOfSamples() << "\r\n\r\n";		
 
 	    ROS_DEBUG("Setting mean_normal vector");
-	    mean_normal << avgnormal[0], avgnormal[1], avgnormal[2];
+	    mean_normal << avg(0), avg(1), avg(2);
 
 	    ROS_DEBUG("Leaving planar_inliers");
 	    return(mean_normal);
@@ -340,7 +400,8 @@ public:
 		{
 		    locate = true;
 	  	  
-		    ROS_WARN("Lost Object at: x = %f  y = %f  z = %f\n",
+		    ROS_WARN_THROTTLE(1, "Lost Object at: x = %f  "\
+				      "y = %f  z = %f\n",
 			     xpos_last,ypos_last,zpos_last);
 	  
 		    pointplus.x = 0.0;
@@ -396,7 +457,7 @@ public:
 	    static Eigen::Vector3f current_normal(0.0,0.0,0.0),
 		count_normal(0.0,0.0,0.0);
 	    
-	    if (call_flag%5 == 0 && calibrate_flag == true)
+	    if (call_flag%1 == 0 && calibrate_flag == true)
 	    {
 		ROS_DEBUG("Calling planar_inliers for the %d time",call_count+1);
 		current_normal = planar_inliers(cloud_filtered_z, planar_cloud);
@@ -483,6 +544,40 @@ public:
 		    write_calibration(t);
 	    }
 	}
+
+    void pass_through(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
+		      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out,
+		      const Eigen::VectorXf lims)
+	{
+	    pcl::PointCloud<pcl::PointXYZ>::Ptr
+		cloud_filtered_x (new pcl::PointCloud<pcl::PointXYZ> ()),
+		cloud_filtered_y (new pcl::PointCloud<pcl::PointXYZ> ());
+	    pcl::PassThrough<pcl::PointXYZ> pass;
+
+	    if(lims.size() != 6)
+	    {
+		ROS_WARN("Limits for pass-through wrong size");
+		return;
+	    }
+
+	    pass.setInputCloud(cloud_in);
+	    pass.setFilterFieldName("x");
+	    pass.setFilterLimits(lims(0), lims(1));
+	    pass.filter(*cloud_filtered_x);
+	    
+	    pass.setInputCloud(cloud_filtered_x);
+	    pass.setFilterFieldName("y");
+	    pass.setFilterLimits(lims(2), lims(3));
+	    pass.filter(*cloud_filtered_y);
+	    
+	    pass.setInputCloud(cloud_filtered_y);
+	    pass.setFilterFieldName("z");
+	    pass.setFilterLimits(lims(4), lims(5));
+	    pass.filter(*cloud_out);
+
+	    return;
+	}
+
 
     void write_calibration(Eigen::Affine3f tr)
 	{
