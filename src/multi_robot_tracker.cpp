@@ -162,17 +162,17 @@ public:
 	    ROS_DEBUG("Begin cluster extraction");
 
 	    // build a KdTree object for the search method of the extraction
-	    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree
-	    	(new pcl::search::KdTree<pcl::PointXYZ> ());
-	    if (cloud->points.size() > 0)
-		tree->setInputCloud (cloud);
-	    else
-	    {
-		ROS_WARN_THROTTLE(1, "No points in cloud, could not init KdTree.");
-		return;
-	    }
-	    ROS_DEBUG("done with KdTree initialization : %f",
-		      (ros::Time::now()-tcur).toSec());
+	    // pcl::search::KdTree<pcl::PointXYZ>::Ptr tree
+	    // 	(new pcl::search::KdTree<pcl::PointXYZ> ());
+	    // if (cloud->points.size() > 0)
+	    // 	tree->setInputCloud (cloud);
+	    // else
+	    // {
+	    // 	ROS_WARN_THROTTLE(1, "No points in cloud, could not init KdTree.");
+	    // 	return;
+	    // }
+	    // ROS_DEBUG("done with KdTree initialization : %f",
+	    // 	      (ros::Time::now()-tcur).toSec());
 	    tcur = ros::Time::now();
 
 	    // create a vector for storing the indices of the clusters
@@ -183,7 +183,7 @@ public:
 	    ec.setClusterTolerance (0.04); // cm
 	    ec.setMinClusterSize (25);
 	    ec.setMaxClusterSize (1500);
-	    ec.setSearchMethod (tree);
+	    // ec.setSearchMethod (tree);
 	    ec.setInputCloud (cloud);
 	    // perform cluster extraction
 	    ec.extract (cluster_indices);
