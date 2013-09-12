@@ -9,9 +9,9 @@
 
   <!-- tracker nodes and static frame broadcaster -->
   <node pkg="objecttracker_nu" type="planar_sys_robot_tracker"
-  	name="robot_tracking_node" output="screen" />
+  	name="robot_tracking_node" output="screen" respawn="true" />
   <node pkg="objecttracker_nu" type="planar_sys_mass_tracker"
-  	name="mass_tracking_node" output="screen" />
+  	name="mass_tracking_node" output="screen" respawn="true" />
   <include file="$(find objecttracker_nu)/launch/optimization_frame_broadcaster.launch"/>
 
 
@@ -47,7 +47,7 @@
       <remap from="~input" to="psx/output" />
       <rosparam>
         filter_field_name: y
-        filter_limit_min: 0.0
+        filter_limit_min: -0.2
         filter_limit_max: 1.0
       </rosparam>
     </node>
