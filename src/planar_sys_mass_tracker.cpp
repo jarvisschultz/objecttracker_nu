@@ -24,6 +24,7 @@
 #include <tf/transform_datatypes.h>
 #include <puppeteer_msgs/PointPlus.h>
 #include <puppeteer_msgs/Robots.h>
+#include <puppeteer_msgs/OperatingConditionChange.h>
 #include <geometry_msgs/Point.h>
 
 // PCL stuff:
@@ -90,6 +91,18 @@ public:
 	    // set a parameter telling the world that I am tracking the robots
 	    ros::param::set("tracking_mass", true);
 	    error_count = 0;
+
+	    // wait for operating condition service:
+	    ROS_INFO("Waiting for operating_condition_change service:");
+	    ROS_INFO("Will not continue until available...");
+	    if(ros::service::waitForService("operating_condition_change"))
+		ROS_INFO("Service available!");
+	    else
+	    {
+		ROS_ERROR("Could not get service, shutting down");
+		ros::shutdown();
+	    }
+
 	    
 	    return;
 	}
@@ -132,8 +145,11 @@ public:
 	    
 	    if (error_count > MAX_CONSECUTIVE_ERRORS)
 	    {
-		ros::param::set("/operating_condition", 4);
-		ROS_ERROR("Lost robot too many times!");
+		puppeteer_msgs::OperatingConditionChange::Request req;
+		puppeteer_msgs::OperatingConditionChange::Response resp;
+		req.state.state = req.state.EMERGENCY;
+		ros::service::call("operating_condition_change", req, resp);
+		ROS_ERROR("Lost mass too many times!");
 		ros::shutdown();
 	    }
 	    // finally publish the results:
