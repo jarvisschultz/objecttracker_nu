@@ -1,5 +1,5 @@
 <launch>
-  <arg name="input" default="points" />
+  <arg name="input" default="points_throttled" />
 
   <!-- launch the kinect -->
   <include file="$(find openni_launch)/launch/openni.launch"/>
@@ -15,6 +15,16 @@
   <include file="$(find objecttracker_nu)/launch/optimization_frame_broadcaster.launch"/>
 
 
+  <group ns="/cloud_throttler" >
+    <node pkg="nodelet" type="nodelet" name="throttler"
+  	  args="load objecttracker_nu/NodeletThrottleCloud /pcl_manager" output="screen">
+      <remap from="topic_in" to="/camera/depth/points" />
+      <remap from="topic_out" to="/camera/depth/points_throttled" />
+      <param name="~update_rate" value="13"/>
+    </node>
+  </group>
+
+  
   <!-- voxel downsampling, and transformation -->
   <group ns="/cloud_downsampler">
     <node pkg="nodelet" type="nodelet" name="voxel" args="load pcl/VoxelGrid /pcl_manager" output="screen">  

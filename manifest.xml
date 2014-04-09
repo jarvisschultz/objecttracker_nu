@@ -16,6 +16,16 @@
   <depend package="tf_conversions"/>
   <depend package="puppeteer_msgs"/>
   <depend package="geometry_msgs"/>
+  <depend package="sensor_msgs"/>
+  <depend package="nodelet"/>
+  <depend package="nodelet_topic_tools"/>
+  <depend package="pluginlib"/>
+  <depend package="message_filters"/>
+
+  <export>
+    <nodelet plugin="${prefix}/cloud_nodelets.xml" />
+  </export>
+  
 </package>
 
 

@@ -1,0 +1,7 @@
+<library path="lib/libnodelet_cloud_throttler">
+  <class name="objecttracker_nu/NodeletThrottleCloud" type="NodeletThrottleCloud" base_class_type="nodelet::Nodelet">
+    <description>
+      Throttle sensor_msgs::PointCloud2 messages
+    </description>
+  </class>
+</library>

@@ -33,6 +33,8 @@ include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
+rosbuild_add_library(nodelet_cloud_throttler src/nodelet_cloud_throttler.cpp)
+
 rosbuild_add_executable(nu_objecttracker src/nu_objecttracker.cpp)
 rosbuild_add_executable(robot_tracker src/robot_tracker.cpp)
 rosbuild_add_executable(object_tracker src/object_tracker_3d.cpp)
