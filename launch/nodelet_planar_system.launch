@@ -78,7 +78,7 @@
       <remap from="~input" to="psx/output" />
       <rosparam>
         filter_field_name: y
-        filter_limit_min: -1.45
+        filter_limit_min: -1.75
         filter_limit_max: -0.15
       </rosparam>
     </node>
