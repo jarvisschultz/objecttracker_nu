@@ -29,12 +29,14 @@
 #include <Eigen/Dense>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
+#include <tf/transform_datatypes.h>
 #include <puppeteer_msgs/PointPlus.h>
 #include <puppeteer_msgs/speed_command.h>
 #include <geometry_msgs/Point.h>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/features/feature.h>
@@ -179,23 +181,24 @@ public:
 	    ROS_DEBUG("Setting up normal estimation parameters");
 	    // Create a KD-Tree
 	    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree
-		(new pcl::search::KdTree<pcl::PointXYZ>);
+	    	(new pcl::search::KdTree<pcl::PointXYZ>);
 	    if (chopped_cloud->points.size() > 0)
-		tree->setInputCloud (chopped_cloud);
+	    	tree->setInputCloud (chopped_cloud);
 	    else
 	    {
-		ROS_WARN("KdTree input empty, cannot initialize");
-		mean_normal << -1.0,-1.0,-1.0;
-		return(mean_normal);
+	    	ROS_WARN("KdTree input empty, cannot initialize");
+	    	mean_normal << -1.0,-1.0,-1.0;
+	    	return(mean_normal);
 	    }
 	    // Now, let's estimate the normals of this cloud:
-	    pcl::PointCloud<pcl::PointXYZ> mls_points;
-	    pcl::MovingLeastSquares<pcl::PointXYZ, pcl::Normal> mls;
-	    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals
-	    	(new pcl::PointCloud<pcl::Normal> ());
+	    // pcl::PointCloud<pcl::PointNormal> mls_points;
+	    pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointNormal> mls;
+	    pcl::PointCloud<pcl::PointNormal>::Ptr cloud_normals
+	    	(new pcl::PointCloud<pcl::PointNormal> ());
 
 	    // Set sampling parameters
-	    mls.setOutputNormals (cloud_normals);
+	    mls.setComputeNormals(true);
+	    // mls.setOutputNormals (cloud_normals);
 	    mls.setInputCloud (chopped_cloud);
 	    mls.setPolynomialFit (true);
 	    mls.setSearchMethod (tree);
@@ -203,8 +206,8 @@ public:
 
 	    ROS_DEBUG("Finding normals");
 	    // Filter:
-	    mls.reconstruct(mls_points);
-	    
+	    mls.process(*cloud_normals);
+
 	    ROS_DEBUG("Finding mean value");
 	    // Now, let's find the mean normal value:
 
@@ -528,11 +531,11 @@ public:
 	    // 				      Rot(2,1),Rot(2,2),Rot(2,3),
 	    // 				      Rot(3,1),Rot(3,2),Rot(3,3)));
 	    ROS_DEBUG("Instantiate a new tf Transform");
-	    tf::Transform tr = tf::Transform(btMatrix3x3
+	    tf::Transform tr = tf::Transform(tf::Matrix3x3
 					     (Rot(0,0),Rot(0,1),Rot(0,2),
 					      Rot(1,0),Rot(1,1),Rot(1,2),
 					      Rot(2,0),Rot(2,1),Rot(2,2)),
-					     btVector3(orig(0),orig(1),orig(2)));
+					     tf::Vector3(orig(0),orig(1),orig(2)));
 	    
 	    br.sendTransform(tf::StampedTransform
 			     (tr, ros::Time::now(), "camera_depth_optical_frame",
