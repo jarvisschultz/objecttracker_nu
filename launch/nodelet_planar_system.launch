@@ -23,7 +23,6 @@
         filter_field_name: z
         filter_limit_min: -3.0
         filter_limit_max: 3.0
-        fiter_limit_negative: True
         leaf_size: 0.01
         output_frame: /oriented_optimization_frame
       </rosparam>
