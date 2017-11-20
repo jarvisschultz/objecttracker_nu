@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(objecttracker_nu)
+project(nodelet_pcl_demo)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -31,13 +31,13 @@ add_executable(planar_sys_robot_tracker src/planar_sys_robot_tracker.cpp)
 add_executable(robot_tracker src/robot_tracker.cpp)
 
 
-add_dependencies(multi_robot_tracker objecttracker_nu_gencpp ${catkin_EXPORTED_TARGETS})
-add_dependencies(nu_objecttracker objecttracker_nu_gencpp ${catkin_EXPORTED_TARGETS})
-add_dependencies(object_tracker_3d objecttracker_nu_gencpp ${catkin_EXPORTED_TARGETS})
-add_dependencies(orientation_calibration objecttracker_nu_gencpp ${catkin_EXPORTED_TARGETS})
-add_dependencies(planar_sys_mass_tracker objecttracker_nu_gencpp ${catkin_EXPORTED_TARGETS})
-add_dependencies(planar_sys_robot_tracker objecttracker_nu_gencpp ${catkin_EXPORTED_TARGETS})
-add_dependencies(robot_tracker objecttracker_nu_gencpp ${catkin_EXPORTED_TARGETS})
+add_dependencies(multi_robot_tracker ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(nu_objecttracker ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(object_tracker_3d ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(orientation_calibration ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(planar_sys_mass_tracker ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(planar_sys_robot_tracker ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(robot_tracker ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 
 target_link_libraries(multi_robot_tracker ${catkin_LIBRARIES} ${PCL_LIBRARIES})

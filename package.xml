@@ -1,9 +1,10 @@
 <?xml version="1.0"?>
 <package>
-  <name> objecttracker_nu </name>
+  <name> nodelet_pcl_demo </name>
   <version>0.0.0</version>
   <description>
-    Object tracking for puppeteer system.
+    Demonstration of how using nodelets can reduce CPU overhead, especially when
+    working with large messages such as point clouds.
   </description>
 
   <maintainer email="schultzjarvis@todo.todo">jarvis</maintainer>
@@ -19,10 +20,8 @@
   <build_depend>tf</build_depend>
   <build_depend>tf_conversions</build_depend>
   <build_depend>puppeteer_msgs</build_depend>
-  <build_depend>message_generation</build_depend>
   <build_depend>libpcl1-dev</build_depend>
   <build_depend>pcl_ros</build_depend>
-  <build_depend>libbullet-dev</build_depend>
   <run_depend>rospy</run_depend>
   <run_depend>roscpp</run_depend>
   <run_depend>std_msgs</run_depend>
@@ -32,7 +31,6 @@
   <run_depend>tf</run_depend>
   <run_depend>tf_conversions</run_depend>
   <run_depend>puppeteer_msgs</run_depend>
-  <run_depend>message_runtime</run_depend>
   <run_depend>libpcl1</run_depend>
   <run_depend>pcl_ros</run_depend>
   
