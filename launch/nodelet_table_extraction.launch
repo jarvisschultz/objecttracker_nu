@@ -1,0 +1,111 @@
+<launch>
+  <arg name="vis" default="true" />
+  <arg name="frames" default="true" />
+  <arg name="pcd" default="false" />
+
+  <!-- if we don't load drivers, let's load frames -->
+  <include if="$(arg frames)" file="$(find rgbd_launch)/launch/kinect_frames.launch">
+      <arg name="camera" value="camera" />
+  </include>
+
+
+  <!-- launch the nodelet manager -->
+  <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen"/>  
+
+
+  <!-- pcd reader  -->
+  <group ns="pcd_reader" if="$(arg pcd)">
+  	<node pkg="tf" name="pcd_frame_connector" type="static_transform_publisher"
+  		  args=" 0 0 0 0 0 3.14 camera_depth_optical_frame base_link 100" />
+  	<node name="pcd_publisher" pkg="pcl_ros" type="pcd_to_pointcloud"
+  		  args="/home/jarvis/Desktop/table_scene_lms400.pcd 0.05">
+  	  <remap from="cloud_pcd" to="/camera/depth/points" />
+  	</node>
+    <!-- <node pkg="nodelet" type="nodelet" name="pcd_reader" args="load pcl/PCDReader /pcl_manager" output="screen"> -->
+  	<!--   <remap from="~output" to="/camera/depth/points" /> -->
+  	<!--   <param name="filename" value="/home/jarvis/Desktop/table_scene_lms400.pcd" /> -->
+  	<!--   <param name="publish_rate" value="0.05" type="double" /> -->
+  	<!--   <param name="tf_frame" value="pcd_frame" /> -->
+  	<!-- </node> -->
+  </group>
+  
+
+  <!-- crop box filtering: -->
+  <group ns="box_filter">
+    <node pkg="nodelet" type="nodelet" name="cropbox" args="load pcl/CropBox /pcl_manager" output="screen">
+      <remap from="~input" to="/camera/depth/points" />
+      <rosparam>
+        min_x: -0.75
+        max_x: 0.5
+        min_y: -0.6
+        max_y: 0.1
+        min_z: 0.5
+        max_z: 2.0
+        keep_organized: true
+        input_frame: camera_depth_optical_frame
+      </rosparam>
+    </node>
+  </group>
+
+  
+  <!-- voxel downsampling, and transformation -->
+  <group ns="cloud_downsampler">
+    <node pkg="nodelet" type="nodelet" name="voxel" args="load pcl/VoxelGrid /pcl_manager" output="screen">
+      <remap from="~input" to="/box_filter/cropbox/output" />
+      <rosparam>
+        leaf_size: 0.01
+        filter_field_name: z
+        filter_limit_min: -10.0
+        filter_limit_max: 10.0
+      </rosparam>
+    </node>
+  </group>
+  
+
+  <!-- table extraction -->
+  <group ns="normal_segmentation">
+    <node pkg="nodelet" type="nodelet" name="segmentation" args="load pcl/SACSegmentation /pcl_manager" output="screen">
+      <remap from="~input" to="/cloud_downsampler/voxel/output" />
+  	  <param name="model_type" value="0" type="int" />
+	  <param name="distance_threshold" value="0.02" type="double" />
+    </node>
+  	<!-- <node pkg="nodelet" type="nodelet" name="project" args="load pcl/ProjectInliers /pcl_manager" output="screen"> -->
+    <!--   <remap from="~input" to="/cloud_downsampler/voxel/output" /> -->
+  	<!--   <param name="model_type" value="0" type="int" /> -->
+  	<!-- </node> -->
+  </group>
+
+  <!-- extract indices -->
+  <group ns="extract_indices" >
+    <node pkg="nodelet" type="nodelet" name="extract_inliers" args="load pcl/ExtractIndices /pcl_manager" output="screen">
+      <remap from="~input" to="/cloud_downsampler/voxel/output" />
+  	  <remap from="~indices" to="/normal_segmentation/segmentation/inliers" />
+	  <param name="approximate_sync" value="true" />
+	</node>
+    <node pkg="nodelet" type="nodelet" name="extract_outliers" args="load pcl/ExtractIndices /pcl_manager" output="screen">
+      <remap from="~input" to="/cloud_downsampler/voxel/output" />
+  	  <remap from="~indices" to="/normal_segmentation/segmentation/inliers" />
+	  <param name="negative" value="true" />
+	  <param name="approximate_sync" value="true" />
+    </node>			 
+  </group>
+
+
+  
+
+  
+  <!-- <!-\- project inliers -\-> -->
+  <!-- <group ns="project_inliers"> -->
+  <!--   <node pkg="nodelet" type="nodelet" name="project" args="load pcl/ProjectInliers /pcl_manager" output="screen"> -->
+  <!--     <remap from="~input" to="/cloud_downsampler/voxel/output" /> -->
+  <!-- 	  <remap from="~model" to="/normal_segmentation/segmentation/model" /> -->
+  <!-- 	  <remap from="~indices" to="/normal_segmentation/segmentation/inliers" /> -->
+  <!-- 	  <param name="model_type" value="0" type="int" /> -->
+  <!--   </node> -->
+  <!-- </group> -->
+
+
+  <node pkg="rviz" type="rviz" respawn="false" name="rviz" if="$(arg vis)"
+		args="-d $(find nodelet_pcl_demo)/launch/nodelet_demo.rviz" />
+
+</launch>
