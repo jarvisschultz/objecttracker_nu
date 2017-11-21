@@ -1,8 +1,0 @@
-<launch>
-  <arg name="debug" default="false"/>
-  <arg if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args"/>
-  <arg unless="$(arg debug)" name="launch_prefix" value=""/>
-  <node pkg="objecttracker_nu" type="object_tracker" name="object_tracker_node" output="screen" launch-prefix="$(arg launch_prefix)">
-  </node>
-  <include file="$(find objecttracker_nu)/launch/optimization_frame_broadcaster.launch"/>
-</launch>

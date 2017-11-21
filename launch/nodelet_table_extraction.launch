@@ -111,20 +111,6 @@
 
   <!-- now let's extract the clusters of whatever is left on the table -->
   <node pkg="nodelet_pcl_demo" name="cluster_extraction" type="multi_robot_tracker" output="screen" />
-  <!-- <group ns="cluster_extract"> -->
-  <!--   <node pkg="nodelet" type="nodelet" name="cluster" args="load pcl/EuclideanClusterExtraction /pcl_manager" output="screen"> -->
-  <!--     <remap from="~input" to="/outlier/cutoff/output" /> -->
-  <!--     <rosparam> -->
-  <!--       cluster_tolerance: 0.05 -->
-  <!--       cluster_min_size: 50 -->
-  <!--       <!-\- cluster_max_size: 10000 -\-> -->
-  <!--       max_clusters: 5 -->
-  <!--       spatial_locator: 1 -->
-  <!--       publish_indices: true -->
-  <!--     </rosparam> -->
-  <!--   </node> -->
-  <!-- </group> -->
-  
   
   <node pkg="rviz" type="rviz" respawn="false" name="rviz" if="$(arg vis)"
         args="-d $(find nodelet_pcl_demo)/launch/nodelet_demo.rviz" />
