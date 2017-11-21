@@ -26,7 +26,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: VoxelCloud
+    SyncSource: AboveTableCloudFilt
 Visualization Manager:
   Class: ""
   Displays:
@@ -63,6 +63,12 @@ Visualization Manager:
           Value: false
         camera_rgb_optical_frame:
           Value: false
+        cluster_1_frame:
+          Value: true
+        cluster_2_frame:
+          Value: true
+        cluster_3_frame:
+          Value: true
         table_frame:
           Value: true
       Marker Scale: 1
@@ -74,6 +80,12 @@ Visualization Manager:
         camera_link:
           camera_depth_frame:
             camera_depth_optical_frame:
+              cluster_1_frame:
+                {}
+              cluster_2_frame:
+                {}
+              cluster_3_frame:
+                {}
               table_frame:
                 {}
           camera_rgb_frame:
@@ -84,8 +96,8 @@ Visualization Manager:
     - Alpha: 0.200000003
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 1.92065537
-        Min Value: 1.02522361
+        Max Value: 2.11600018
+        Min Value: 0.497000009
         Value: true
       Axis: Z
       Channel Name: z
@@ -243,7 +255,7 @@ Visualization Manager:
       Color: 85; 170; 0
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 64
@@ -260,7 +272,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -291,6 +303,96 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 0
+      Color Transformer: FlatColor
+      Decay Time: 0.100000001
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 0
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Cluster1
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Flat Squares
+      Topic: /cluster_1_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 0; 255; 0
+      Color Transformer: FlatColor
+      Decay Time: 0.100000001
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 0
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Cluster2
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Flat Squares
+      Topic: /cluster_2_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 0; 127
+      Color Transformer: FlatColor
+      Decay Time: 0.100000001
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 0
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Cluster3
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Flat Squares
+      Topic: /cluster_3_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -315,16 +417,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.9297986
+      Distance: 2.55981421
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.193609491
-        Y: -0.0849136338
-        Z: 0.990364015
+        X: 0.0793658867
+        Y: -0.103365041
+        Z: 0.996982753
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
@@ -333,7 +435,7 @@ Visualization Manager:
       Pitch: -1.56979632
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.64849615
+      Yaw: 4.69348955
     Saved: ~
 Window Geometry:
   Displays:
