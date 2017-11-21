@@ -15,33 +15,11 @@
 
   <!-- pcd reader  -->
   <group ns="pcd_reader" if="$(arg pcd)">
-    <!-- <node pkg="tf" name="pcd_frame_connector" type="static_transform_publisher" -->
-    <!--       args=" 0 0 0 0 0 3.14 camera_depth_optical_frame base_link 100" /> -->
     <node name="pcd_publisher" pkg="pcl_ros" type="pcd_to_pointcloud"
-          args="$(find nodelet_pcl_demo)/launch/test.pcd 0.05">
+          args="$(find nodelet_pcl_demo)/launch/table_rotated.pcd 0.05">
       <remap from="cloud_pcd" to="/camera/depth/points" />
 	  <param name="frame_id" value="camera_depth_optical_frame" />
     </node>
-    <!-- <node pkg="nodelet" type="nodelet" name="transformer" args="load pcl/PassThrough /pcl_manager" output="screen"> -->
-    <!--   <remap from="~input" to="/camera/depth/points_rot" /> -->
-    <!--   <remap from="~output" to="/camera/depth/points" /> -->
-    <!--   <rosparam> -->
-    <!--     filter_field_name: z -->
-    <!--     filter_limit_min: -10.0 -->
-    <!--     filter_limit_max: 10.0 -->
-    <!--     output_frame: camera_depth_optical_frame -->
-    <!--   </rosparam> -->
-    <!-- </node> -->
-    <!-- </node> -->
-    <!-- <node pkg="nodelet" type="nodelet" name="pcd_reader" args="load pcl/PCDReader /pcl_manager" output="screen"> -->
-    <!--   <remap from="~output" to="/camera/depth/points" /> -->
-    <!--   <param name="filename" value="$(find nodelet_pcl_demo)/launch/table_scene_lms400.pcd" /> -->
-    <!--   <param name="publish_rate" value="0.05" type="double" /> -->
-    <!--   <param name="tf_frame" value="base_link" /> -->
-    <!--   <rosparam> -->
-    <!--     output_frame: camera_depth_optical_frame -->
-    <!--   </rosparam> -->
-    <!-- </node> -->
   </group>
   
 
@@ -56,8 +34,6 @@
         max_y: 0.1
         min_z: 0.5
         max_z: 2.0
-        <!-- input_frame: camera_depth_optical_frame -->
-        <!-- output_frame: camera_depth_optical_frame -->
       </rosparam>
     </node>
   </group>
@@ -113,7 +89,6 @@
       <remap from="~input" to="/cloud_downsampler/voxel/output" />
       <rosparam>
         input_frame: table_frame
-        <!-- output_frame: camera_depth_optical_frame -->
         filter_field_name: y
         filter_limit_min: -3.0
         filter_limit_max: 0.0
