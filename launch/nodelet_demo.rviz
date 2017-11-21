@@ -53,8 +53,6 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        base_link:
-          Value: false
         camera_depth_frame:
           Value: false
         camera_depth_optical_frame:
@@ -76,8 +74,6 @@ Visualization Manager:
         camera_link:
           camera_depth_frame:
             camera_depth_optical_frame:
-              base_link:
-                {}
               table_frame:
                 {}
           camera_rgb_frame:
@@ -88,8 +84,8 @@ Visualization Manager:
     - Alpha: 0.200000003
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 1.92065549
-        Min Value: 1.02522373
+        Max Value: 1.92065537
+        Min Value: 1.02522361
         Value: true
       Axis: Z
       Channel Name: z
@@ -217,7 +213,7 @@ Visualization Manager:
       Color: 85; 0; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 63
@@ -234,8 +230,8 @@ Visualization Manager:
       Unreliable: true
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
-    - Alpha: 1
+      Value: true
+    - Alpha: 0.100000001
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -253,7 +249,7 @@ Visualization Manager:
       Max Intensity: 64
       Min Color: 0; 0; 0
       Min Intensity: 0
-      Name: PointCloud2
+      Name: AboveTableCloud
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
@@ -261,6 +257,36 @@ Visualization Manager:
       Size (m): 0.00999999978
       Style: Flat Squares
       Topic: /table_cutoff/cutoff/output
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 64
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: AboveTableCloudFilt
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Flat Squares
+      Topic: /outlier/cutoff/output
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -289,25 +315,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.1407733
+      Distance: 2.9297986
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.129283354
-        Y: -0.0504398197
-        Z: 0.990327716
+        X: -0.193609491
+        Y: -0.0849136338
+        Z: 0.990364015
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: -1.55979633
+      Pitch: -1.56979632
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.65533829
+      Yaw: 4.64849615
     Saved: ~
 Window Geometry:
   Displays:

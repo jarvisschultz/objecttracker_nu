@@ -9,9 +9,11 @@ from std_srvs.srv import EmptyResponse
 from math import pi
 
 INIT_OFFSET = [0,0,0]
-INIT_ROLL = 0*pi/180.
+INIT_ROLL = 0.0
 PARENT_FRAME = "camera_depth_optical_frame"
 CHILD_FRAME = "table_frame"
+PLANE_OFFSET = 0.01
+
 
 class TableSegmenter( object ):
     def __init__(self):
@@ -41,17 +43,16 @@ class TableSegmenter( object ):
 
     def update_model(self, srv):
         if self.model_coeffs is None:
-            return
+            return EmptyResponse()
         # we need to convert the table model into useful transform data. the
         # plane coefficients are [a,b,c,d] where the equation of the plane is
         # given by `ax + by + cz + d = 0`
         # from the plane normal, we can calculate the orientation:
         model = np.array(self.model_coeffs)
-        normal = np.array(model[0:3])
         # we want to make sure this normal is pointed "down"
-        if np.dot(normal, [0,1,0]) < 0:
-            normal = -1.0*normal
+        if np.dot(model[0:3], [0,1,0]) < 0:
             model = -1.0*model
+        normal = np.array(model[0:3])
         # now we can build a rotation matrix from this normal, and assuming the
         # table frame's x-axis is aligned with the sensor's x axis:
         z = np.cross([1,0,0], normal)
@@ -64,7 +65,7 @@ class TableSegmenter( object ):
         x = 0
         z = 1
         y0 = (-d - c*z - a*x)/b
-        self.trans = [0, y0, 1]
+        self.trans = [0, y0 - PLANE_OFFSET, 1]
         return EmptyResponse()
 
 

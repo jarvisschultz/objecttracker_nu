@@ -15,18 +15,33 @@
 
   <!-- pcd reader  -->
   <group ns="pcd_reader" if="$(arg pcd)">
-  	<node pkg="tf" name="pcd_frame_connector" type="static_transform_publisher"
-  		  args=" 0 0 0 0 0 3.14 camera_depth_optical_frame base_link 100" />
-  	<node name="pcd_publisher" pkg="pcl_ros" type="pcd_to_pointcloud"
-  		  args="$(find nodelet_pcl_demo)/launch/table_scene_lms400.pcd 0.05">
-  	  <remap from="cloud_pcd" to="/camera/depth/points" />
-  	</node>
+    <!-- <node pkg="tf" name="pcd_frame_connector" type="static_transform_publisher" -->
+    <!--       args=" 0 0 0 0 0 3.14 camera_depth_optical_frame base_link 100" /> -->
+    <node name="pcd_publisher" pkg="pcl_ros" type="pcd_to_pointcloud"
+          args="$(find nodelet_pcl_demo)/launch/test.pcd 0.05">
+      <remap from="cloud_pcd" to="/camera/depth/points" />
+	  <param name="frame_id" value="camera_depth_optical_frame" />
+    </node>
+    <!-- <node pkg="nodelet" type="nodelet" name="transformer" args="load pcl/PassThrough /pcl_manager" output="screen"> -->
+    <!--   <remap from="~input" to="/camera/depth/points_rot" /> -->
+    <!--   <remap from="~output" to="/camera/depth/points" /> -->
+    <!--   <rosparam> -->
+    <!--     filter_field_name: z -->
+    <!--     filter_limit_min: -10.0 -->
+    <!--     filter_limit_max: 10.0 -->
+    <!--     output_frame: camera_depth_optical_frame -->
+    <!--   </rosparam> -->
+    <!-- </node> -->
+    <!-- </node> -->
     <!-- <node pkg="nodelet" type="nodelet" name="pcd_reader" args="load pcl/PCDReader /pcl_manager" output="screen"> -->
-  	<!--   <remap from="~output" to="/camera/depth/points" /> -->
-  	<!--   <param name="filename" value="/home/jarvis/Desktop/table_scene_lms400.pcd" /> -->
-  	<!--   <param name="publish_rate" value="0.05" type="double" /> -->
-  	<!--   <param name="tf_frame" value="pcd_frame" /> -->
-  	<!-- </node> -->
+    <!--   <remap from="~output" to="/camera/depth/points" /> -->
+    <!--   <param name="filename" value="$(find nodelet_pcl_demo)/launch/table_scene_lms400.pcd" /> -->
+    <!--   <param name="publish_rate" value="0.05" type="double" /> -->
+    <!--   <param name="tf_frame" value="base_link" /> -->
+    <!--   <rosparam> -->
+    <!--     output_frame: camera_depth_optical_frame -->
+    <!--   </rosparam> -->
+    <!-- </node> -->
   </group>
   
 
@@ -41,8 +56,8 @@
         max_y: 0.1
         min_z: 0.5
         max_z: 2.0
-        keep_organized: true
-        input_frame: camera_depth_optical_frame
+        <!-- input_frame: camera_depth_optical_frame -->
+        <!-- output_frame: camera_depth_optical_frame -->
       </rosparam>
     </node>
   </group>
@@ -66,8 +81,8 @@
   <group ns="normal_segmentation">
     <node pkg="nodelet" type="nodelet" name="segmentation" args="load pcl/SACSegmentation /pcl_manager" output="screen">
       <remap from="~input" to="/cloud_downsampler/voxel/output" />
-  	  <param name="model_type" value="0" type="int" />
-	  <param name="distance_threshold" value="0.02" type="double" />
+      <param name="model_type" value="0" type="int" />
+      <param name="distance_threshold" value="0.02" type="double" />
     </node>
   </group>
 
@@ -75,15 +90,15 @@
   <group ns="extract_indices" >
     <node pkg="nodelet" type="nodelet" name="extract_inliers" args="load pcl/ExtractIndices /pcl_manager" output="screen">
       <remap from="~input" to="/cloud_downsampler/voxel/output" />
-  	  <remap from="~indices" to="/normal_segmentation/segmentation/inliers" />
-	  <param name="approximate_sync" value="true" />
-	</node>
+      <remap from="~indices" to="/normal_segmentation/segmentation/inliers" />
+      <param name="approximate_sync" value="true" />
+    </node>
     <node pkg="nodelet" type="nodelet" name="extract_outliers" args="load pcl/ExtractIndices /pcl_manager" output="screen">
       <remap from="~input" to="/cloud_downsampler/voxel/output" />
-  	  <remap from="~indices" to="/normal_segmentation/segmentation/inliers" />
-	  <param name="negative" value="true" />
-	  <param name="approximate_sync" value="true" />
-    </node>			 
+      <remap from="~indices" to="/normal_segmentation/segmentation/inliers" />
+      <param name="negative" value="true" />
+      <param name="approximate_sync" value="true" />
+    </node>
   </group>
 
   
@@ -95,9 +110,10 @@
     <node pkg="nodelet_pcl_demo" type="table_cutoff_settings.py" name="table_cutoff_settings" output="screen"
           respawn="true" />
     <node pkg="nodelet" type="nodelet" name="cutoff" args="load pcl/PassThrough /pcl_manager" output="screen">
-      <remap from="~input" to="/extract_indices/extract_outliers/output" />
+      <remap from="~input" to="/cloud_downsampler/voxel/output" />
       <rosparam>
         input_frame: table_frame
+        <!-- output_frame: camera_depth_optical_frame -->
         filter_field_name: y
         filter_limit_min: -3.0
         filter_limit_max: 0.0
@@ -107,10 +123,18 @@
 
 
   <!-- perform statistical outlier removal of the non-table cloud -->
-  <!-- <group ns="" -->
+  <group ns="outlier">
+    <node pkg="nodelet" type="nodelet" name="cutoff" args="load pcl/StatisticalOutlierRemoval /pcl_manager" output="screen">
+      <remap from="~input" to="/table_cutoff/cutoff/output" />
+      <rosparam>
+        mean_k: 10
+        stddev: 0.01
+      </rosparam>
+    </node>
+  </group>
 
   
   <node pkg="rviz" type="rviz" respawn="false" name="rviz" if="$(arg vis)"
-		args="-d $(find nodelet_pcl_demo)/launch/nodelet_demo.rviz" />
+        args="-d $(find nodelet_pcl_demo)/launch/nodelet_demo.rviz" />
 
 </launch>
