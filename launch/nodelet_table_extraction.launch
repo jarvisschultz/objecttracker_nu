@@ -18,7 +18,7 @@
   	<node pkg="tf" name="pcd_frame_connector" type="static_transform_publisher"
   		  args=" 0 0 0 0 0 3.14 camera_depth_optical_frame base_link 100" />
   	<node name="pcd_publisher" pkg="pcl_ros" type="pcd_to_pointcloud"
-  		  args="/home/jarvis/Desktop/table_scene_lms400.pcd 0.05">
+  		  args="$(find nodelet_pcl_demo)/launch/table_scene_lms400.pcd 0.05">
   	  <remap from="cloud_pcd" to="/camera/depth/points" />
   	</node>
     <!-- <node pkg="nodelet" type="nodelet" name="pcd_reader" args="load pcl/PCDReader /pcl_manager" output="screen"> -->
@@ -69,13 +69,9 @@
   	  <param name="model_type" value="0" type="int" />
 	  <param name="distance_threshold" value="0.02" type="double" />
     </node>
-  	<!-- <node pkg="nodelet" type="nodelet" name="project" args="load pcl/ProjectInliers /pcl_manager" output="screen"> -->
-    <!--   <remap from="~input" to="/cloud_downsampler/voxel/output" /> -->
-  	<!--   <param name="model_type" value="0" type="int" /> -->
-  	<!-- </node> -->
   </group>
 
-  <!-- extract indices -->
+  <!-- extract indices from table extraction-->
   <group ns="extract_indices" >
     <node pkg="nodelet" type="nodelet" name="extract_inliers" args="load pcl/ExtractIndices /pcl_manager" output="screen">
       <remap from="~input" to="/cloud_downsampler/voxel/output" />
@@ -90,21 +86,30 @@
     </node>			 
   </group>
 
-
   
 
+  <!-- add another pass-through filter that removes points below the planar
+       extraction, will also start a node that offers a service to update the
+       dynamic reconfigure settings of this nodelet based on the output of the planar extraction -->
+  <group ns="table_cutoff" >
+    <node pkg="nodelet_pcl_demo" type="table_cutoff_settings.py" name="table_cutoff_settings" output="screen"
+          respawn="true" />
+    <node pkg="nodelet" type="nodelet" name="cutoff" args="load pcl/PassThrough /pcl_manager" output="screen">
+      <remap from="~input" to="/extract_indices/extract_outliers/output" />
+      <rosparam>
+        input_frame: table_frame
+        filter_field_name: y
+        filter_limit_min: -3.0
+        filter_limit_max: 0.0
+      </rosparam>
+    </node>
+  </group>
+
+
+  <!-- perform statistical outlier removal of the non-table cloud -->
+  <!-- <group ns="" -->
+
   
-  <!-- <!-\- project inliers -\-> -->
-  <!-- <group ns="project_inliers"> -->
-  <!--   <node pkg="nodelet" type="nodelet" name="project" args="load pcl/ProjectInliers /pcl_manager" output="screen"> -->
-  <!--     <remap from="~input" to="/cloud_downsampler/voxel/output" /> -->
-  <!-- 	  <remap from="~model" to="/normal_segmentation/segmentation/model" /> -->
-  <!-- 	  <remap from="~indices" to="/normal_segmentation/segmentation/inliers" /> -->
-  <!-- 	  <param name="model_type" value="0" type="int" /> -->
-  <!--   </node> -->
-  <!-- </group> -->
-
-
   <node pkg="rviz" type="rviz" respawn="false" name="rviz" if="$(arg vis)"
 		args="-d $(find nodelet_pcl_demo)/launch/nodelet_demo.rviz" />
 
