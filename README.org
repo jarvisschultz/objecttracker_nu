@@ -113,7 +113,10 @@
 	rosservice call /table_cutoff/update_table_model "{}"
 	#+END_SRC
 
-** Launch File Notes
+	When using live data, you may have to tune some of the parameters in the
+	launch file to achieve the desired performance. Note that many of the
+	parameters can be tuned in real time using [[http://wiki.ros.org/rqt_reconfigure][rqt_reconfigure]].
+
 
 
 
