@@ -110,7 +110,7 @@
 
 
   <!-- now let's extract the clusters of whatever is left on the table -->
-  <node pkg="nodelet_pcl_demo" name="cluster_extraction" type="multi_robot_tracker" output="screen" />
+  <node pkg="nodelet_pcl_demo" name="cluster_extraction" type="cluster_extractor" output="screen" />
   
   <node pkg="rviz" type="rviz" respawn="false" name="rviz" if="$(arg vis)"
         args="-d $(find nodelet_pcl_demo)/launch/nodelet_demo.rviz" />

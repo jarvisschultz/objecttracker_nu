@@ -1,0 +1,120 @@
+* Demo: Using PCL Nodelets
+  
+  This is a simple package that uses a few nodelets from the [[http://wiki.ros.org/pcl_ros][pcl_ros]] ROS
+  package. The basic idea is that we've constructed a pipeline of pointcloud
+  processing steps where the overall goal is to extract a few objects sitting on
+  a tabletop into separate point clouds and calculate the centroid of each of
+  these clouds. Most of the processing steps use nodelets and the nodelets
+  operate on =sensor_msgs/PointCloud2= messages (that might come from a Kinect
+  or an ASUS Xtion PRO LIVE). In this demo, you can either use live data from a
+  device, or the package includes a [[http://pointclouds.org/documentation/tutorials/pcd_file_format.php][PCD file]] that can be used if you don't have
+  access to a device.
+
+** High Level Description
+   
+   The majority of the package is implemented in a single launch file called
+   [[file:launch/nodelet_table_extraction.launch][nodelet_table_extraction.launch]]. At a high level, the pipeline follows these
+   steps:
+   1. Either a depth sensor device or a PCD file is used to publish a
+      =sensor_msgs/PointCloud2= on the =/camera/depth/points= topic.
+   2. A [[https://github.com/ros-perception/perception_pcl/blob/lunar-devel/pcl_ros/src/pcl_ros/filters/crop_box.cpp][pcl/CropBox filter nodelet]] is used to throw away all points that exist
+      outside of a cubic volume described by maximum and minimum bounds in x,y,z
+      coordinate axes.
+   3. The output of the =pcl/CropBox= filter is fed into a [[https://github.com/ros-perception/perception_pcl/blob/lunar-devel/pcl_ros/src/pcl_ros/filters/voxel_grid.cpp][pcl/VoxelGrid filter nodelet]]
+      that downsamples the point cloud to a coarser point cloud that uses less data.
+   4. The output of the =pcl/VoxelGrid= nodelet is fed into a
+      [[https://github.com/ros-perception/perception_pcl/blob/lunar-devel/pcl_ros/src/pcl_ros/segmentation/sac_segmentation.cpp][pcl/SACSegmentation nodelet]] nodelet that is used to extract a planar model
+      from the point cloud. If your =pcl/CropBox= filter parameters have been
+      tuned correctly, this plane should be the surface of the table top. This
+      nodelet produces two things (i) a =pcl_msgs/PointIndices= message
+      containing the indices of the points in the input cloud that belong to the
+      plane, and (ii) the model parameters of the plane published as a
+      =pcl_msgs/ModelCoefficients= (the plane is parameterized as
+      /ax+by+cz+d=0/). These parameters represent a least-squares plane that
+      best fits the points that belong to the plane.
+   5. The indices are fed into two [[https://github.com/ros-perception/perception_pcl/blob/lunar-devel/pcl_ros/src/pcl_ros/filters/extract_indices.cpp][pcl/ExtractIndices filter nodelets]] that are
+      used to create point clouds (as opposed to lists of indices) of the points
+      that belong to the plane, and the points that don't belong to the plane.
+      These point clouds are not strictly necessary, but they do help
+      visualization.
+   6. The [[file:src/table_cutoff_settings.py][table_cutoff_settings.py node]] subscribes to the model coefficients
+      from the plane extraction. Every time a client calls the =std_srvs/Empty=
+      service that this node offers (called =/table_cutoff/update_table_model=),
+      this node updates its internal model of where the table is. It provides
+      this information to the ROS world by broadcasting a =/tf= transform from
+      the frame the original cloud is expressed in
+      (=camera_depth_optical_frame=) to a frame called =table_frame=.
+   7. A [[https://github.com/ros-perception/perception_pcl/blob/lunar-devel/pcl_ros/src/pcl_ros/filters/passthrough.cpp][pcl/PassThrough filter nodelet]] is then used to throw away all points
+      that are at or below the plane extracted during plane extraction. This is
+      done by setting the =input_frame= private parameter for the nodelet to be
+      =table_frame=. Thus, if the =table_cutoff_settings.py= node has provided
+      the transform to the =table_frame=, then the limits of the pass through
+      filter are easy to calculate.
+   8. The output of the =pcl/PassThrough= nodelet is fed into a
+      [[https://github.com/ros-perception/perception_pcl/blob/lunar-devel/pcl_ros/src/pcl_ros/filters/statistical_outlier_removal.cpp][pcl/StatisticalOutlierRemoval filter nodelet]] that helps to remove random
+      stray points.
+   9. The output of the =pcl/StatisticalOutlierRemoval= filter is fed into the
+      [[file:src/cluster_extractor.cpp][cluster_extraction node]]. This simple C++ node subscribes to the output of
+      the =StatisticalOutlierRemoval= filter, it converts this cloud into a PCL
+      datatype, and then it calls
+      =pcl::EuclideanClusterExtraction<pcl::PointXYZ>.extract= to produce a
+      =std::vector<pcl::PointIndices>=. Each element in this =std_vector= is of
+      type =pcl::PointIndices=, and the values in the =pcl::PointIndices=
+      entries represent the points in the original cloud that belong to each
+      cluster detected during cluster extraction. This data is used to construct
+      point clouds for up to =MAX_CLUSTERS= and publish them on separate topics
+      (named =/cluster_X_cloud=). The centroids of each of these cluster clouds
+      are also computed and published as =geometry_msgs/PointStamped= messages
+      (on the =/cluster_X_point= topics) and sent as =/tf= data.
+
+** Usage
+
+*** PCD Data
+
+	To run using the [[file:launch/table_rotated.pcd][included PCD file]] simply run 
+	#+BEGIN_SRC html
+	roslaunch nodelet_pcl_demo nodelet_table_extraction.launch pcd:=true
+	#+END_SRC
+	This will use the =pcd_to_pointcloud= node from the =pcl_ros= package to read
+	the PCD file, and repeatedly publish it on the =/camera/depth/points= topic
+	(at approx. 20Hz). The included PCD file is a slightly modified version of
+	the [[https://raw.github.com/PointCloudLibrary/data/master/tutorials/table_scene_lms400.pcd][table_scene_lms400.pcd]] file used in the [[http://pointclouds.org/documentation/tutorials/cluster_extraction.php#cluster-extraction][PCL Euclidean Cluster Extraction Tutorial]]. The only difference is that I've rotated the raw data by π radians about the x axis. This was to ensure that the coordinate systems when using the PCD data agreed with the data one would get when using =openni_launch= or =openni2_launch=.
+
+	Once all of the nodes/nodelets are up-and-running, you can call the
+	=/table_cutoff/update_table_model= service to update the location of the
+	table's plane in the ROS world. This can be done by running
+	#+BEGIN_SRC sh
+	rosservice call /table_cutoff/update_table_model "{}"
+	#+END_SRC
+	
+	In =rviz= you should be able to see the output of all of the steps of the
+	pipeline described above (all steps have labeled displays in the =rviz=
+	config that is automatically loaded).
+
+*** Live Data
+
+	Start by running a driver that is capable of producing the
+	=sensor_msgs/PointCloud2= data required by this pipeline. I used an [[https://www.asus.com/us/3D-Sensor/Xtion_PRO_LIVE/][ASUS Xtion PRO LIVE]] and the [[http://wiki.ros.org/openni2_launch][openni2_launch ROS package]]. This could also work with the Kinect for Box 360 using [[http://wiki.ros.org/freenect_launch][freenect_launch]] or [[http://wiki.ros.org/openni_launch][openni_launch]] (which could also work with the ASUS), the Kinect for Xbox One using [[https://github.com/code-iai/iai_kinect2][iai_kinect2]], the [[http://wiki.ros.org/RealSense][Intel RealSense]] devices, or a whole host of other options. With my ASUS Xtion PRO LIVE, all I had to do was run
+	#+BEGIN_SRC sh
+	roslaunch openni2_launch openni2.launch
+	#+END_SRC
+
+	Then all you have to do is run the launch file using
+	#+BEGIN_SRC sh
+	roslaunch nodelet_pcl_demo nodelet_table_extraction.launch pcd:=false
+	#+END_SRC
+
+	You'll need to call the =/table_cutoff/update_table_model= service to update
+	the geometry of the table, when using live data, it probably makes sense to
+	look at the =PlanarInlierCloud= in =rviz= to be sure that you are accurately
+	fitting the desired plane before calling this service. As before, the
+	service can be called at the command line using
+	#+BEGIN_SRC sh
+	rosservice call /table_cutoff/update_table_model "{}"
+	#+END_SRC
+
+** Launch File Notes
+
+
+
+

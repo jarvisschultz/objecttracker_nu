@@ -21,6 +21,6 @@ include_directories(include
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(multi_robot_tracker src/multi_robot_tracker.cpp)
-add_dependencies(multi_robot_tracker ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(multi_robot_tracker ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+add_executable(cluster_extractor src/cluster_extractor.cpp)
+add_dependencies(cluster_extractor ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(cluster_extractor ${catkin_LIBRARIES} ${PCL_LIBRARIES})
