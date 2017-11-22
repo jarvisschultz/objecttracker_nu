@@ -6,7 +6,6 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   tf
   tf_conversions
-  puppeteer_msgs
   geometry_msgs)
 
 find_package(PCL 1.3 REQUIRED)
